@@ -35,6 +35,17 @@ Rules for writing entries:
 
 ## Log
 
+### BUG-006 — Projected northing in metres was passed to a cosine as if it were degrees
+
+- **Date:** 2026-08-22
+- **Status:** FIXED
+- **Area:** projection
+- **Symptom:** `scripts/estimate_sun.py` printed `latitude 500338.984 deg` for a window whose true latitude is 16.5 deg. It did not crash, and the experiment still produced a correct-looking result.
+- **Root cause:** `Triple.transform` maps pixel to **projected metres**, not degrees — the CRS is Equirectangular on a 1737400 m sphere. The code unpacked `transform * (col, row)` straight into a latitude variable and handed it to `pixel_spacing()`, which takes `cos(latitude)`. `cos(500338.984 deg)` reduces to `cos(298.98 deg) = 0.485` instead of `cos(16.5 deg) = 0.959`, so east-west ground spacing was 3.59 m rather than 7.10 m and every surface normal was computed with east-west slopes roughly twice too steep.
+- **Fix:** Added `Triple.pixel_latlon()` in `scripts/triple_io.py`, converting projected metres to degrees by arc length (`deg = m / R`) with the sphere radius read from the CRS rather than hardcoded, plus a range assertion on the result. `estimate_sun.py` now calls it.
+- **Check:** `python -c "...pixel_latlon(0,0)"` returns 18.0001N / 8.9999E against label bounds of 15.000244-18.0 N and 9.0-11.999756 E. The in-method assertion fires if the transform units ever change.
+- **Why this one mattered:** **the experiment passed with the bug in place.** Azimuth recovery still found east for morning and west for evening, because a wrong east-west scale distorts slope magnitudes without flipping the east/west asymmetry the test keys on. A passing headline result is not evidence that intermediate quantities are right. After the fix both correlations improved (morning +0.518 to +0.533, evening +0.513 to +0.534) and the morning estimate moved to exactly 90 deg — that improvement is the only reason we can tell the fix helped.
+
 ### BUG-005 — Loader self-check assumed morning/evening images correlate positively
 
 - **Date:** 2026-08-22

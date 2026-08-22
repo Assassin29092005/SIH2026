@@ -40,6 +40,27 @@ class Triple:
     height: int
     transform: object
     crs: object
+    body_radius_m: float
+
+    def pixel_latlon(self, row: float, col: float) -> tuple[float, float]:
+        """Selenographic (latitude, longitude) in degrees for a pixel centre.
+
+        `self.transform` maps pixel -> PROJECTED metres, not degrees. These
+        products are Equirectangular with standard_parallel_1 = 0 on a sphere of
+        radius R, so easting/northing convert back by arc length: deg = m/R.
+        Feeding raw northing to a cosine as if it were degrees silently corrupts
+        the east-west spacing correction -- see BUGS.md BUG-006.
+        """
+        x, y = self.transform * (col, row)
+        radius = self.body_radius_m
+        lat = np.degrees(y / radius)
+        lon = np.degrees(x / radius)
+
+        assert -90.0 <= lat <= 90.0, (
+            f"latitude {lat:.3f} out of range - transform units are probably "
+            "not what pixel_latlon assumes"
+        )
+        return float(lat), float(lon)
 
     def read_window(self, row: int, col: int, size: int) -> dict[str, np.ndarray]:
         """Read the same size x size window from all three products."""
@@ -92,7 +113,15 @@ def open_triple(tile: str) -> Triple:
     assert len(shapes) == 1, f"grid shapes disagree across products: {grids}"
 
     width, height, transform, crs = grids["morning"]
-    return Triple(tile, paths, width, height, transform, crs)
+
+    # Sphere radius from the CRS (MOON = 1737400 m). Needed to turn projected
+    # metres back into degrees; do not hardcode it here.
+    radius = None
+    if crs is not None:
+        radius = crs.to_dict().get("R") or crs.to_dict().get("a")
+    assert radius, f"could not read body radius from CRS: {crs}"
+
+    return Triple(tile, paths, width, height, transform, crs, float(radius))
 
 
 def demo(tile: str | None = None, size: int = 512) -> int:
