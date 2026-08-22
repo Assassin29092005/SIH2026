@@ -35,6 +35,26 @@ Rules for writing entries:
 
 ## Log
 
+### BUG-011 — Shared zero-mask faked the headline result; identity ground truth was also wrong
+
+**This invalidates the previously reported 100% inlier rates. Read this before trusting any earlier number.**
+
+- **Date:** 2026-08-23
+- **Status:** FIXED (diagnosis); re-measurement outstanding
+- **Area:** stage-c-matching, eval
+- **Symptom:** Registering real OHRC against Kaguya produced 44,212/44,223 inliers, RMSE 0.454 px, fitted scale 1.0000, rotation 0.002 deg. Too clean. Controls destroyed it:
+  - shifting the raw OHRC by 5 px and by 15 px both still recovered dx = -0.14
+  - matching OHRC against a **different part of the Moon**: 7399 matches at ~0 displacement
+  - replacing OHRC with **pure noise**: 7439 matches at ~0 displacement
+  - Re-running the same controls on the earlier Kaguya morning-vs-evening result reproduced the failure: rolling morning by 15 px still gave dx = +0.11, **noise** gave 1721 "correct" matches, and a **constant grey image** gave 1266.
+- **Root cause — two independent errors that happened to agree:**
+  1. **Shared zero-mask.** `stage_b_pair()` masks *both* images with the *same* validity mask and writes 0 into the masked pixels. At 5 deg sun elevation that blacks out 44-83% of the frame in a byte-identical pattern in both images. LoFTR matches that pattern: it is high-contrast, perfectly aligned, illumination-independent, and does not move when the underlying imagery is shifted. The matcher never needed the imagery.
+  2. **Identity ground truth was wrong.** Kaguya morning and evening share a map grid, so I assumed pixel (i,j) corresponds to pixel (i,j). Phase correlation — independent of any matcher — measures a systematic **dy = +8.25 px (~62 m)** offset, consistent across 5 of 6 windows (dy spread 3.42 px). The two mosaics are independently orthorectified and carry a residual co-registration error.
+  - The two errors pointed the same way. The mask artifact produced identity-aligned matches, and identity was exactly what the (wrong) ground truth rewarded. A real match at the true +8 px offset was scored *incorrect*; a fake match at 0 px was scored *correct*. That is why the baseline read 0% and Stage B read 100%.
+- **Fix:** Never write the same mask into both images. Per-image masks, or no masking with the render clamped at a floor. Ground truth must be identity **plus the measured inter-product offset**, or established per window by phase correlation.
+- **Check:** Any matching result must pass all four: real pair recovers ~0, a raw image rolled by N recovers -N, pure noise collapses, constant grey collapses. `RAW (no Stage B)` passes all four (dx -0.33; roll +15 gives -16.48; noise 3 matches; constant 0).
+- **Why my earlier control missed it:** in `dense_match.py` I tested a 7 px shift and recovered +7.29, and took that as proof. But I shifted the **already-normalised** image, which moves imagery and mask together. Shifting the **raw** image before normalisation separates them, and only then does the matcher's reliance on the mask show. **A control that perturbs the output cannot detect a confound in how the output was built — perturb the input.**
+
 ### BUG-010 — Blind scale estimation is confounded by normalising both sides against the same DEM
 
 - **Date:** 2026-08-23

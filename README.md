@@ -1,5 +1,20 @@
 # Sun-Angle Invariant Lunar Image Correspondence
 
+> ## ⚠️ Results under revision (2026-08-23)
+>
+> The previously reported **100% inlier rates are invalid**. Control experiments showed the matcher was locking onto a **shared zero-mask** written identically into both images, not onto the imagery: pure noise and a constant grey image both produced thousands of "correct" matches, and shifting the raw input by 15 px changed the recovered displacement by 0.11 px.
+>
+> A second, independent error compounded it. The identity ground truth was wrong — phase correlation measures a systematic **8.25 px (~62 m)** offset between the Kaguya morning and evening mosaics. Real matches at the true offset were scored *incorrect* and mask artifacts at zero offset were scored *correct*, which is why the baseline read 0% and Stage B read 100%.
+>
+> What survives, because none of it depends on the matcher or on identity GT:
+> - the −0.560 raw anti-correlation between morning and evening
+> - the DEM render reproducing real imagery at r ≈ 0.53–0.58, and recovering illumination direction
+> - the measured 8.25 px inter-product offset itself
+> - raw LoFTR passing all four controls (dx −0.33; roll +15 → −16.48; noise and constant collapse)
+>
+> Full diagnosis in [BUGS.md](BUGS.md) BUG-011. Re-measurement is the next work item.
+
+
 **Smart India Hackathon 2026 — Problem Statement SIH26166 (ISRO / Department of Space)**
 
 > Multi-modal, Sun angle and scale invariant image correspondence using Chandrayaan-2 optical images (OHRC, TMC and IIRS)
