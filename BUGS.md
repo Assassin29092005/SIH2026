@@ -35,6 +35,17 @@ Rules for writing entries:
 
 ## Log
 
+### BUG-009 — TMC-2 candidate ranking measured strip length, not suitability
+
+- **Date:** 2026-08-23
+- **Status:** FIXED
+- **Area:** data-ingest
+- **Symptom:** `ch2_footprints.py --pick tmc` reported `ch2_tmc_ndn_20201126T1610528086_d_oth_d32` at latitude -0.05 with 5597 NAC products and all four illumination bins — an apparently ideal equatorial candidate. Reading its shapefile record showed `UL_LAT 28.40`, `BL_LAT -28.50`: a strip spanning 57 degrees of latitude, roughly 1730 km long.
+- **Root cause:** Two compounding errors on the same assumption that a footprint is small. Candidates were ranked by centre latitude, `(min+max)/2`, which for a pole-to-pole strip is ~0 regardless of where the strip actually is. And the NAC count was queried over the strip's full bounding box, so a longer strip always scores higher — the number measured box area, not coverage density.
+- **Fix:** `probe_box()` in `scripts/ch2_footprints.py` clips each strip to a fixed 1x1 degree window where it crosses a chosen latitude (`--at-lat`), and scoring reports NAC **per square degree** alongside the full strip area. Strips are ranked narrowest-first, since a narrow strip wastes less download per useful square degree. OHRC keeps whole-footprint scoring — its 3 km swath genuinely is the target.
+- **Check:** `python scripts/ch2_footprints.py --pick tmc --at-lat 0` — probe densities now land in a comparable 150-200 NAC/deg2 band across candidates instead of scaling with strip length, and reported strip areas (4.7-8.9 deg2) are visibly smaller than the ~98 deg2 product the broken version recommended.
+- **Why this one mattered:** it produced a confident, plausible recommendation that would have cost a multi-GB download of a strip whose useful overlap was a tiny fraction of its extent. **A ranking metric has to be invariant to the size of the thing being ranked**; raw counts over variable-sized regions never are.
+
 ### BUG-008 — Independent validity masks gave the two images different intensity stretches
 
 - **Date:** 2026-08-23

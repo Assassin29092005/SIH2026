@@ -90,7 +90,36 @@ def summarise() -> int:
     return 0
 
 
-def pick(kind: str, max_lat: float, limit: int) -> int:
+# Side of the square probe window, in degrees, used to score a strip. Roughly
+# 30 km at the equator -- big enough to hold plenty of NAC frames, small enough
+# that the count means "coverage here" rather than "this box is enormous".
+PROBE_DEG = 1.0
+
+
+def probe_box(b: tuple, at_lat: float) -> tuple | None:
+    """A small square box where a footprint crosses `at_lat`, or None if it misses.
+
+    TMC-2 derived products are strips up to ~57 degrees long. Scoring the whole
+    bounding box measures strip length, not suitability: a longer strip always
+    wins on raw NAC count. Probing a fixed-size window makes candidates
+    comparable. See BUGS.md BUG-009.
+    """
+    west, east, south, north = b
+    if not (south <= at_lat <= north):
+        return None
+    half = PROBE_DEG / 2
+    lon_c = (west + east) / 2
+    # Never widen the box beyond the strip itself, or we score empty space.
+    return (max(west, lon_c - half), min(east, lon_c + half),
+            at_lat - half, at_lat + half)
+
+
+def area_deg2(b: tuple) -> float:
+    west, east, south, north = b
+    return max(east - west, 1e-9) * max(north - south, 1e-9)
+
+
+def pick(kind: str, max_lat: float, limit: int, at_lat: float = 0.0) -> int:
     pattern = {"ohrc": "ch2_ohr_cal*.shp",
                "tmc": "ch2_tmc_derived_ortho*.shp"}[kind]
     recs = load(pattern)
@@ -100,32 +129,49 @@ def pick(kind: str, max_lat: float, limit: int) -> int:
         b = bbox(rec)
         if not b:
             continue
-        centre = (b[2] + b[3]) / 2
-        if abs(centre) <= max_lat:
-            cands.append((abs(centre), b, rec))
-    cands.sort(key=lambda x: x[0])
+        if kind == "ohrc":
+            # Small footprints (3 km swath), so the whole box IS the probe.
+            centre = (b[2] + b[3]) / 2
+            if abs(centre) <= max_lat:
+                cands.append((b, b, rec))
+        else:
+            # Long strips: score a fixed window where the strip crosses at_lat.
+            probe = probe_box(b, at_lat)
+            if probe and abs(at_lat) <= max_lat:
+                cands.append((probe, b, rec))
 
-    print(f"{len(cands)} {kind.upper()} products within +/-{max_lat:g} deg latitude")
-    print(f"checking LROC NAC coverage for the {limit} nearest the equator\n")
-    print(f"{'PRODUCT_ID':<44} {'lat':>7} {'lon':>7} {'NAC':>5} {'bins':>5}")
-    print("-" * 74)
+    if kind == "ohrc":
+        cands.sort(key=lambda x: abs((x[0][2] + x[0][3]) / 2))
+        print(f"{len(cands)} OHRC products within +/-{max_lat:g} deg latitude")
+        print(f"scoring the whole footprint (3 km swath, so the box is the target)\n")
+    else:
+        # Prefer narrower strips: less wasted download per useful square degree.
+        cands.sort(key=lambda x: area_deg2(x[1]))
+        print(f"{len(cands)} TMC-2 strips crossing latitude {at_lat:g}")
+        print(f"scoring a {PROBE_DEG:g}x{PROBE_DEG:g} deg probe window at that latitude,")
+        print("NOT the whole strip - see BUGS.md BUG-009\n")
+
+    print(f"{'PRODUCT_ID':<44} {'lat':>7} {'lon':>7} {'strip deg2':>11} "
+          f"{'NAC':>5} {'/deg2':>7} {'bins':>5}")
+    print("-" * 92)
 
     shown = 0
-    for _, b, rec in cands:
+    for probe, full, rec in cands:
         if shown >= limit:
             break
-        west, east, south, north = b
-        total = ode_count("CDRNAC4", (west, east, south, north), ihid="LRO", iid="LROC")
+        total = ode_count("CDRNAC4", probe, ihid="LRO", iid="LROC")
         if not total:
             continue
         bins = sum(
             1 for lo, hi in INCIDENCE_BINS
-            if (ode_count("CDRNAC4", (west, east, south, north), ihid="LRO",
-                          iid="LROC", **{INC_MIN: lo, INC_MAX: hi}) or 0) >= 2
+            if (ode_count("CDRNAC4", probe, ihid="LRO", iid="LROC",
+                          **{INC_MIN: lo, INC_MAX: hi}) or 0) >= 2
         )
+        density = total / area_deg2(probe)
         flag = "  <- multi-illumination" if bins >= 2 else ""
         print(f"{str(rec.get('PRODUCT_ID',''))[:44]:<44} "
-              f"{(south+north)/2:>7.2f} {(west+east)/2:>7.2f} {total:>5} {bins:>5}{flag}")
+              f"{(probe[2]+probe[3])/2:>7.2f} {(probe[0]+probe[1])/2:>7.2f} "
+              f"{area_deg2(full):>11.1f} {total:>5} {density:>7.0f} {bins:>5}{flag}")
         shown += 1
     return 0
 
@@ -136,10 +182,12 @@ def main() -> int:
     parser.add_argument("--pick", choices=["ohrc", "tmc"])
     parser.add_argument("--max-lat", type=float, default=60.0)
     parser.add_argument("--limit", type=int, default=10)
+    parser.add_argument("--at-lat", type=float, default=0.0,
+                        help="latitude at which to probe TMC-2 strips")
     args = parser.parse_args()
 
     if args.pick:
-        return pick(args.pick, args.max_lat, args.limit)
+        return pick(args.pick, args.max_lat, args.limit, args.at_lat)
     return summarise()
 
 
