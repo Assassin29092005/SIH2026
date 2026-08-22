@@ -51,6 +51,21 @@ The Kaguya TC morning/evening mosaics are the same terrain, globally, under oppo
 
 The PS dataset field also says "specific datasets link will be provided - TBD". **Write the data loader against an abstract image-pair interface** so an official ISRO eval set can be swapped in without a rewrite.
 
+### Verified access, 2026-08-22
+
+Use the **PDS ODE REST API** (`https://oderest.rsl.wustl.edu/live2/`) for everything except Chandrayaan-2. Public, no key, no login. Parameter reference cached at `data/interim/ode_manual.txt` — **read it before adding any filter**, and see `BUGS.md` BUG-002 for why.
+
+- **Chandrayaan-2 is NOT indexed by ODE.** Only Chandrayaan-1 M3 is. CH-2 OHRC/TMC-2/IIRS requires a PRADAN account. Someone must register at [chmapbrowse](https://chmapbrowse.issdc.gov.in/) — this is a hard blocker on the source-image side and should happen immediately.
+- **LROC NAC:** `ihid=LRO&iid=LROC&pt=CDRNAC4`, 2,887,274 calibrated products, footprints and incidence angles both indexed and queryable.
+- **Kaguya/SELENE TC:** `ihid=SLN&iid=TC`. `TCMORM` (morning, 7,200 tiles), `TCEVEM` (evening, 7,200), `TCDTMM` (DEM, 7,200) share one 3°×3° grid and differ only in the product-id stem:
+  - `TCO_MAPM04_N21E009N18E012SC` / `TCO_MAPE04_...` / `DTM_MAP_02_...`
+  - So a complete (morning, evening, DEM) triple resolves by string substitution. ~288 MB per file, direct HTTP from JAXA DARTS, no login. Note the URL path uses lowercase `m04`/`e04` while the filename is uppercase.
+  - This is the Stage-B training set: co-registered same-terrain imagery under opposite illumination, plus the DEM the photometric renderer needs.
+
+**Site selection matters more than expected.** At the Chandrayaan-3 landing site (69°S) NAC coverage is 390 products but collapses into just 2 illumination bins — 333 of them at 70-90° incidence, because it is polar. A mid-latitude box populates all 4 bins evenly (216/189/145/153). **Train on mid-latitude tiles; reserve polar sites for evaluation**, where they match OHRC's actual targeting.
+
+Run `python scripts/survey_coverage.py --site <name>` before committing to any region.
+
 ## Training curriculum
 
 Easy to hard. Hold out the last tier.

@@ -1,0 +1,33 @@
+# data — never commit imagery or SPICE kernels
+data/
+*.IMG
+*.img
+*.cub
+*.qub
+*.LBL
+*.xml.bak
+kernels/
+
+# model artifacts
+*.pt
+*.pth
+*.ckpt
+runs/
+checkpoints/
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.ipynb_checkpoints/
+
+# os / editor
+Thumbs.db
+.DS_Store
+.vscode/
+.idea/
+
+# cached reference docs (regenerate with scripts/)
+data/interim/ode_manual.pdf

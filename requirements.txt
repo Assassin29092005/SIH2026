@@ -1,0 +1,23 @@
+# SIH26166 — lunar image correspondence
+# Python 3.11. Install: pip install -r requirements.txt
+#
+# NOTE: rasterio's Windows wheels bundle GDAL (3.10.3) WITH the PDS4 / ISIS3 /
+# PDS / ISIS2 / VICAR drivers. No separate GDAL, conda, or ISIS3 install is
+# needed to READ planetary products. See scripts/check_env.py.
+
+numpy>=2.0
+scipy>=1.14
+pandas>=2.2
+matplotlib>=3.9
+requests>=2.32
+tqdm>=4.66
+
+# geospatial / planetary
+rasterio>=1.4          # bundles GDAL incl. PDS4 + ISIS3 drivers
+pyproj>=3.7
+spiceypy>=8.0          # SPICE geometry: sun angles, pointing
+
+# CV / ML
+opencv-python>=4.10
+torch>=2.5             # CPU build is fine locally; training runs on Kaggle GPU
+kornia>=0.7
