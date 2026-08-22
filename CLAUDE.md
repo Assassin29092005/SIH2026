@@ -73,6 +73,20 @@ Consequences — do not lose these:
 
 Run `python scripts/survey_coverage.py --site <name>` before committing to any region.
 
+### Chandrayaan-2 footprints, resolved 2026-08-23
+
+PRADAN needs a login but the **shapefiles are separate small downloads** (`OHRC_ShapeFiles.zip` 127 KB, `TMC2_ShapeFiles.zip` 4.5 MB) under Other Downloads. Product filenames carry a timestamp but no location, so never download imagery before checking footprints — OHRC products are ~1.2 GB each and 624 of them exist.
+
+`python scripts/ch2_footprints.py --summary` and `--pick {ohrc,tmc}` do this.
+
+**OHRC is polar-dominated.** Of 77 products with usable corner coordinates: 42 south-polar, 7 north-polar, 27 equatorial, 1 mid-latitude. It is a targeting instrument, not a survey one, so it cannot be a training source. Use it for evaluation and the demo. 28 products sit within +/-30 deg, and the six nearest the equator all have LROC NAC coverage across all four illumination bins.
+
+**TMC-2 is the working source.** 8436 products with usable corners, well spread: 4036 equatorial, 2725 mid-N, 1450 mid-S.
+
+**TMC-2 ships ortho + DTM pairs — 3049 of each, and every ortho has a matching DTM**, resolvable by replacing `_oth_` with `_dtm_` in the product id (verified 3049/3049). This is the Kaguya triple trick again, on genuine Chandrayaan-2 data.
+
+Note TMC-2 gives one illumination per site, not a morning/evening pair. So the production task is **TMC-2 ortho (or OHRC) matched against LROC NAC** — cross-sensor, cross-illumination and cross-scale at once, which is precisely what the PS asks for. Kaguya remains the controlled training set because it alone provides identity-correspondence pairs.
+
 ## Training curriculum
 
 Easy to hard. Hold out the last tier.
