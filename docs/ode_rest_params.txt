@@ -1,0 +1,2720 @@
+ 
+Planetary Data System (PDS) 
+Geosciences Node 
+ 
+Orbital Data Explorer (ODE) 
+REST Interface Manual 
+ 
+ 
+February, 2024 
+Version 2.1.6 
+ 
+Prepared for: 
+NASA Planetary Data Systems 
+ 
+ 
+Prepared by: 
+Dan Scholes 
+Keith Bennett 
+PDS Geosciences Node 
+ 
+ 
+
+ 
+ODE REST Interface Manual 
+ 
+   
+   02/19/24 
+Page 2 
+ 
+ 
+Table of Contents 
+1 
+Introduction ................................................................................................................. 9 
+1.1 
+Version 2.x Changes ............................................................................................. 10 
+1.2 
+References ............................................................................................................. 11 
+2 
+Interface Overview .................................................................................................... 12 
+2.1 
+Address ................................................................................................................. 12 
+2.2 
+Query Type ........................................................................................................... 12 
+2.3 
+Query Parameters .................................................................................................. 13 
+2.4 
+Query Output ........................................................................................................ 13 
+2.5 
+WKT Format ......................................................................................................... 18 
+3 
+Product Information Queries ..................................................................................... 18 
+3.1 
+Product Location Queries ..................................................................................... 22 
+3.2 
+Footprint (WKT) Queries ..................................................................................... 23 
+3.3 
+Product Query Results .......................................................................................... 24 
+3.3.1 
+Product Query Examples ................................................................................... 27 
+3.4 
+Browse Query ....................................................................................................... 28 
+3.5 
+Thumbnail Query .................................................................................................. 29 
+3.6 
+Large Browse Query ............................................................................................. 29 
+3.7 
+Product Coverage KML and Shapefile Results .................................................... 29 
+3.7.1 
+Product Coverage KML and Shapefile Query Examples .................................. 29 
+4 
+“IIPT” Queries .......................................................................................................... 30 
+4.1.1 
+IIPT Query Examples ........................................................................................ 32 
+5 
+Feature Queries ......................................................................................................... 32 
+5.1 
+Feature Classes Query........................................................................................... 32 
+5.1.1 
+Feature Classes Query Examples ....................................................................... 32 
+5.2 
+Feature Names Query ........................................................................................... 32 
+5.2.1 
+Feature Classes Query Examples ....................................................................... 33 
+5.3 
+Feature Data Query ............................................................................................... 33 
+5.3.1 
+Feature Data Query Examples ........................................................................... 34 
+6 
+Performance .............................................................................................................. 34 
+7 
+Examples ................................................................................................................... 34 
+ 
+List of Figures  
+Figure 1 - ODE Structure ................................................................................................................ 9 
+Figure 2 - ODE Structure with REST Interface ............................................................................ 10 
+Figure 3 - ODE REST in User Processing .................................................................................... 10 
+  
+List of Tables  
+Table 1 - ODE REST Address ...................................................................................................... 12 
+Table 2 - ODE REST Query Types .............................................................................................. 12 
+Table 3 - Output Format Parameters ............................................................................................. 14 
+Table 4 - Common Query Results (returned whenever an XML/JSON string is returned) ......... 17 
+Table 5 - Common Product Query Setup Parameters ................................................................... 18 
+Table 6 - Common Product Query Parameters ............................................................................. 20 
+Table 7- Common Product Query Limit Parameters .................................................................... 21 
+
+ 
+ODE REST Interface Manual 
+ 
+   
+   02/19/24 
+Page 3 
+ 
+ 
+Table 8 - “Loc” Query Parameter Options ................................................................................... 22 
+Table 9 - Product Query Results ................................................................................................... 24 
+Table 10 - IIPT Query Parameters ................................................................................................ 30 
+Table 11 - IIPT Query Results ...................................................................................................... 31 
+Table 12  Feature Classes Query Parameters ................................................................................ 32 
+Table 13 - Feature Classes Query Results .................................................................................... 32 
+Table 14 - Feature Query Parameters ........................................................................................... 33 
+Table 15 - Feature Query Results ................................................................................................. 33 
+Table 16 - Feature Data Query Parameters ................................................................................... 33 
+Table 17 - Feature Data Query Results ......................................................................................... 33 
+ 
+ 
+ 
+ 
+
+ 
+ODE REST Interface Manual 
+ 
+   
+   02/19/24 
+Page 4 
+ 
+ 
+DOCUMENT CHANGE LOG 
+ 
+Change 
+Date 
+Affected Portions 
+Initial Draft 
+09/12 
+ 
+Added Footprint Query 
+04/13 
+ 
+Added Special Product Types for Queries 
+06/13 
+ 
+Added Query Order 
+06/13 
+ 
+V1.1 
+ 
+Revised User Manual structure 
+ 
+Added geographic contains and contained 
+by search capability 
+09/13 
+All 
+V2.0 
+4/14 
+All – SEE SECTION 1.1 
+Clarified use of X result type. 
+4/14 
+Section 3 
+Added Feature Type/Name Query 
+5/14 
+Section 5 
+Added multiple ODE ID Query 
+10/14 
+Section 3 
+Added discussion of WKT 
+11/14 
+Section 2 and Section 3 
+V2.1 - Added KML/Shapefile Generation 
+12/14 
+Section 2 and Section 3 
+Clarified use of Footprints 
+8/15 
+Section 3.2 
+Added two more Python examples of querying the 
+ODE REST interface 
+8/17 
+Section 7 
+V2.1.2 – Added more product query examples 
+5/18 
+ 
+V2.1.3 – Added JSON output example and changed 
+links to HTTPS 
+6/21 
+Section 2.4 
+V2.1.4 – Extended labels for PDS3 and PDS4 
+9/21 
+Table 5 – Product Query 
+Section 3.3.1 – Example Queries 
+V2.1.5 – Added the ability to filter product count and 
+product queries by PDS4 ProductLID, BundleLID, 
+and CollectionLID.  
+Also changed Observation and creation times to no 
+longer allow wildcards. These are true min and max 
+values to match the updates on the website. 
+ 
+ 
+ 
+9/23 
+Table 5 – Product Query Setup 
+Parameters 
+Table 6 – Product Query Parameters  
+Table 7 Query Limit Parameters 
+Table 9 – Product Query Results 
+Section 3.3.1 – Product Query Examples  
+Section 3.7.1 – Product Coverage KML 
+and Shapefile Query examples 
+V2.1.6 – For product footprints in the form of 
+linestrings, ODE will be using Start Latitude, Stop 
+Latitude, Start Longitude, Stop Longitude. For these 
+line strings, the Min Latitude, Max Latitude, Min 
+Longitude, Max Longitude will be phased out, but 
+still available in the current version of the REST 
+interface.  
+2/24 
+Table 9 – Product Query Results 
+ 
+ 
+ACRONYMS AND ABREVIATIONS 
+ 
+
+ 
+ODE REST Interface Manual 
+ 
+   
+   02/19/24 
+Page 5 
+ 
+ 
+A/D 
+Analog to Digital Converter 
+ADC 
+Analog to Digital Converter 
+ADR 
+Ancillary Data Record 
+API 
+Application Programming Interface (we are using the ESRI Javascript API 
+and Javascript Dojo Framework API) 
+APL 
+The Johns Hopkins University Applied Physics Laboratory 
+APS 
+Alpha Particle Spectrometer (on Lunar Prospector) 
+AQS 
+Archive Query System 
+ASCII 
+American Standard Code for Information Interchange 
+BDR 
+Basic Data Recorder 
+CAT 
+CRISM Analysis Tool 
+CDR 
+Calibration Data Record 
+CRaTER 
+Cosmic Ray Telescope for the Effects of Radiation (on LRO) 
+CRISM 
+Compact Reconnaissance Imaging Spectrometer for Mars (on Mars 
+Reconnaissance Orbiter) 
+CSV 
+Comma-Separated Value (a format for organizing tabular data in ASCII 
+format) 
+CTX 
+Context Imager (on Mars Reconnaissance Orbiter) 
+DAC 
+Digital to Analog Converter 
+DDR 
+Derived Data Record 
+DIVINER 
+LRO Lunar Radiometer Experiment 
+DPCM 
+Differential Pulse-Code Modulation (compression) 
+DPU 
+CRISM Data Processing Unit 
+EDR 
+Experiment Data Record 
+EPF 
+Emission Phase Function 
+ER 
+Electron Reflectometer (on Lunar Prospector) 
+FOV 
+Field-of-View 
+FPU 
+Focal Plane Unit 
+Gb 
+Gigabit (109 bits) 
+GME 
+CRISM Gimbal Motor Electronics 
+GRS 
+Gamma-Ray Spectrometer 
+GSFC 
+Goddard Space Flight Center 
+HiRes 
+High Resolution Camera (on Clementine) 
+HIRISE 
+High-Resolution Imaging Science Experiment (on Mars Reconnaissance 
+Orbiter) 
+HOP 
+High-output Paraffin actuator; on CRISM a HOP deploys the cover 
+HRSC 
+High Resolution Stereo Camera (on Mars Express) 
+I/F 
+Intensity divided by flux, or the ratio of radiance to incident solar radiation 
+
+ 
+ODE REST Interface Manual 
+ 
+   
+   02/19/24 
+Page 6 
+ 
+ 
+IR 
+Infrared 
+ISRO 
+Indian Space Research Organization 
+JHU/APL 
+The Johns Hopkins University Applied Physics Laboratory 
+JPL 
+Jet Propulsion Laboratory 
+JSON 
+JavaScript Object Notation. JSON is a lightweight format for storing and 
+transporting data. 
+LAMP 
+Lyman-Alpha Mapping Project (on LRO) 
+LED 
+Light-emitting diode 
+LEND 
+Lunar Exploration Neutron Detector (on LRO) 
+LIDAR 
+Laser Image Detection and Ranging (on Clementine) 
+LOLA 
+Lunar Orbiter Laser Altimeter (on LRO) 
+LRO 
+Lunar Reconnaissance Orbiter 
+LROC 
+Lunar Reconnaissance Orbiter Camera (on LRO) 
+LOS 
+Line of Sight 
+Ls 
+Solar longitude; a measure of Mars’ motion in its orbit, in degrees, since 
+northern hemisphere vernal equinox 
+LUT 
+Look-up Table 
+LVDS 
+Low-Voltage Differential Signal 
+LWIR 
+Long Wavelength Infrared Camera (on Clementine) 
+M3 
+Moon Mineralogy Mapper (on Chandrayaan-1) 
+MAG 
+Magnetometer 
+MARCI 
+Mars Color Imager – Wide Angle Camera (on Mars Reconnaissance Orbiter) 
+MARSIS 
+Mars Advanced Radar for Subsurface and Ionosphere Sounding (on Mars 
+Express) 
+MASCS 
+Mercury Atmospheric and Surface Composition Spectrometer (on 
+MESSENGER) 
+MCS 
+Mars Climate Sounder (on Mars Reconnaissance Orbiter) 
+MDIS 
+Mercury Dual Imaging System (on MESSENGER) 
+MDR 
+Merged Data Record 
+MESSENGER 
+Mercury Surface, Space Environment, Geochemistry, and Ranging 
+MEX 
+Mars Express 
+MGS 
+Mars Global Surveyor 
+MLA 
+Mercury Laser Altimeter (on MESSENGER) 
+MOC 
+Mars Orbiter Camera (on Mars Global Surveyor) 
+MOLA 
+Mars Orbiter Laser Altimeter (on Mars Global Surveyor) 
+MRDR 
+CRISM Map-projected Reduced Data Record 
+MRO  
+Mars Reconnaissance Orbiter 
+MTRDR 
+CRISM Map-projected Targeted Reduced Data Record 
+
+ 
+ODE REST Interface Manual 
+ 
+   
+   02/19/24 
+Page 7 
+ 
+ 
+MUX 
+Multiplexed or multiplexer 
+NIR 
+Near-Infrared Camera (on Clementine) 
+NS 
+Neutron Spectrometer 
+ODE 
+Orbital Data Explorer 
+OMEGA 
+Observatoire pour la Minéralogie, l’Eau, les Glaces et l’Activité (on Mars 
+Express) 
+OSU 
+CRISM Optical Sensor Unit 
+PDS  
+Planetary Data System 
+PFS 
+Planetary Fourier Spectrometer 
+RDR 
+Reduced Data Record 
+RS 
+Radio Science  
+SHARAD 
+Shallow Radar (on Mars Reconnaissance Orbiter) 
+SIS 
+Software Interface Specification 
+SNR 
+Signal-to-noise ratio 
+SOC 
+Science Operations Center 
+SPICE 
+SPacecraft, Instrument, Camera, and Events; a set of data formats for 
+spacecraft ephemieris, attitude, and instrument pointing 
+STC 
+Star Tracker Camera (on Clementine) 
+Tb 
+Terabit (1012 bits) 
+TBD 
+To Be Determined 
+TES 
+Thermal Emission Spectrometer (on Mars Global Surveyor) 
+THEMIS 
+Thermal Emission Imaging System (on Mars Odyssey) 
+TRDR 
+CRISM Targeted Reduced Data 
+UVVS 
+Ultraviolet and Visible Spectrometer (on MESSENGER) 
+UVVIS 
+Ultraviolet/Visible Camera (on Clementine) 
+VIRS 
+Visible and Infrared Spectrograph (on MESSENGER) 
+VNIR 
+Visible / near-infrared  
+XML 
+eXtensible Markup Language 
+XRS 
+X-Ray Spectrometer 
+ 
+DEFINITIONS 
+ 
+Areocentric 
+Coordinates 
+The areocentric coordinate system is a right-handed system with the origin at the 
+center of mass of Mars.  Areocentric latitude is the angle between the equatorial 
+plane and a vector connecting a point on the surface and the origin of the 
+coordinate system.  Latitudes are positive in the northern hemisphere and negative 
+in the southern hemisphere.  Areocentric longitude increases to the east. 
+
+ 
+ODE REST Interface Manual 
+ 
+   
+   02/19/24 
+Page 8 
+ 
+ 
+Data 
+Product 
+A data product is a set of measurements resulting from a science observation, 
+usually stored in one file.  For example, an image, a spectrum, and a time series 
+table of measurements are data products.  A product has a PDS label that contains 
+metadata about a product such as when and where the data were collected, what the 
+data contain, and as how the data are organized.  These labels are either detached 
+files or attached to at the beginning of a data product file.  More information about 
+data products can be found in the PDS documentation here. 
+Data Set 
+Planetary science data stored in PDS are organized by data sets.  A data set is a 
+collection of related data products, usually products acquired by a particular 
+instrument and processed in a certain way.  The data set also includes all 
+documentation and supporting materials needed to understand and use the data 
+products.  Data sets are stored in volumes.  Most MRO data sets are stored in a 
+single volume. 
+Orbital Data 
+Explorer 
+(ODE) 
+NASA’s Planetary Data System (PDS) Geosciences Node’s Orbital Data Explorer 
+(ODE) (https://ode.rsl.wustl.edu) provides map and forms-based search, retrieve, 
+and order function for PDS for PDS datasets for Mars, Mercury, Moon, and 
+Venus.  ODE is designed to augment the existing PDS search and retrieval 
+interface by providing advanced search, retrieve, and order tools, integrated 
+analysis tools, and visualization tools. 
+Planetary 
+Data 
+System 
+(PDS) 
+NASA’s Planetary Data System (PDS) archives and distributes scientific data 
+from NASA planetary missions, astronomical observations, and laboratory 
+measurements. The PDS is sponsored by NASA's Science Mission Directorate. Its 
+purpose is to ensure the long-term usability of NASA data and to stimulate 
+advanced research. PDS is continually upgrading and updating its archives, to 
+better serve the needs of its user communities. Learn more about PDS.  
+ 
+ 
+ 
+
+ 
+ODE REST Interface Manual 
+ 
+   
+   02/19/24 
+Page 9 
+ 
+ 
+1 
+INTRODUCTION 
+NOTE: THIS DOCUMENT ASSUMES FAMILIARITY WITH ODE'S WEB SITE 
+Please send issues, questions, or suggestions to oderest@wunder.wustl.edu. 
+NASA's Planetary Data System's Geosciences Node supports a tool known as the Orbital Data 
+Explorer (ODE) (https://ode.rsl.wustl.edu).  ODE provides a searchable web tool for finding and 
+downloading PDS datasets for Mars, Mercury, Moon, and Venus.  Please see the ODE help system 
+(https://ode.rsl.wustl.edu/mars/indexhelp.aspx) for more information about ODE and the user web 
+interface. 
+Behind the scenes, ODE scans the various PDS nodes, PDS data nodes, and other data sources 
+to extract metadata about PDS products (see Figure 1).  This metadata is stored in the ODE 
+Metadata database.  This database is the core of the ODE web site. 
+ 
+Orbital Data Explorer (ODE)
+PDS
+Geosciences
+Node
+Spacecraft
+Instrument
+PDS
+Imaging
+Node
+Instrument
+Instrument
+PDS
+HiRISE
+Data Node
+Instrument
+Spacecraft
+ODE 
+Metadata 
+Database
+ODE Backend 
+Processor
+ODE Web 
+Interface
+Limited 
+Mission
+Data
+Planetary 
+Base Products
+PDS
+Atmopheres
+Node
+PDS
+PPI
+Node
+Domain
+Scientist
+PDS
+THEMIS
+Data Node
+PDS
+LOLA
+Data Node
+PDS
+LROC
+Data Node
+Instrument
+Instrument
+Instrument
+Instrument
+Instrument
+Instrument
+Spacecraft
+Spacecraft
+Lunar Orbiter
+Digitized File 
+Archive
+USGS
+UPC Data
+ 
+Figure 1 - ODE Structure 
+In 2012, it was decided to add a new REST-like interface to ODE to allow other groups to 
+develop specialized or domain-specific interfaces to the PDS data stored in ODE (See Figure 2).  
+This interface will allow external tools or web sites to access PDS products; metadata; and other 
+information about products stored in ODE. 
+
+ 
+ODE REST Interface Manual 
+ 
+   
+   02/19/24 
+Page 10 
+ 
+ 
+Orbital Data Explorer (ODE)
+PDS
+Geosciences
+Node
+Spacecraft
+Instrument
+PDS
+Imaging
+Node
+Instrument
+Instrument
+PDS
+HiRISE
+Data Node
+Instrument
+Spacecraft
+ODE 
+Metadata 
+Database
+ODE Backend 
+Processor
+(Bunter)
+ODE Web 
+Interface
+Limited 
+Mission
+Data
+Planetary 
+Base Products
+PDS
+Atmopheres
+Node
+PDS
+PPI
+Node
+Domain
+Scientist
+PDS
+THEMIS
+Data Node
+PDS
+LOLA
+Data Node
+PDS
+LROC
+Data Node
+Instrument
+Instrument
+Instrument
+Instrument
+Instrument
+Instrument
+Spacecraft
+Spacecraft
+Lunar Orbiter
+Digitized File 
+Archive
+USGS
+UPC Data
+ODE REST
+Interface
+External
+Tools
+ 
+Figure 2 - ODE Structure with REST Interface 
+ 
+Figure 3 - ODE REST in User Processing 
+ 
+1.1 
+Version 2.x Changes 
+User Processing Pipeline
+ODE 
+Metadata 
+Database
+ODE Backend 
+Processor
+(Bunter)
+ODE REST
+Interface
+Processing Step
+Processing Step
+Processing Step
+Processing Step
+Meta Data Query
+Product Request
+Meta Data Results
+PDS Product
+Processing Step
+User Website
+Webpage
+Meta Data Query
+Meta Data Results
+Webpage
+Product Request
+PDS Product
+PDS Geosciences Node
+PDS Imaging Node
+PDS HiRISE Data Node
+PDS Atmospheres Node
+PDS PPI Node
+PDS THEMIS Data 
+Node
+PDS LOLA Data Node
+PDS LROC Data Node
+LO Digitized Archive
+Metadata and 
+Product URLS
+
+ 
+ODE REST Interface Manual 
+ 
+   
+   02/19/24 
+Page 11 
+ 
+ 
+Version 2.0 is a major upgrade to V1.1: 
+ LOLA RDR queries are now part of a new Granular Data System (GDS) REST 
+interface.  Due to the time that some queries can take, the GDS REST interface allows 
+asynchronous or background queries.  The ODE REST interface supports queries just 
+to the ODE meta-database. 
+ Revision to the use of the TARGET query parameter.  In V1.1, this referred to the ODE 
+Meta-Database.  In V2.0, this refers to the target body such as “mars”, “phobos”, 
+“moon”, etc.   
+ Added odemetadb= parameter to select the ODE meta-database.  
+ Added emission, incidence, phase angle query parameters. 
+ Added solar longitude query parameter. 
+ Added the “IIPT” query.  This new query allows a user to get a list of instrument 
+hosts/instrument/product type sets.   
+ Queries require a query= parameter 
+ Add query for large browse images 
+ Product, Browse, or Thumbnail queries require either a combination of IHID, IID, and 
+PT parameters or the PDSID parameter or the ODEID parameter. 
+ Added Feature Class (type)/Name query 
+ Added feature class (type), feature name, and feature data (lat/lon bounding box) query 
+types 
+Version 2.1 is a moderate upgrade to V2.0: 
+ Added KML/Shapefile Generation 
+1.2 
+References 
+Related documents: 
+1. Orbital Data System (ODE) Software Design Document, Keith Bennett, Dan Scholes, 
+Jue Wang, Feng Zhou 
+ 
+ 
+
+ 
+ODE REST Interface Manual 
+ 
+   
+   02/19/24 
+Page 12 
+ 
+ 
+2 
+INTERFACE OVERVIEW 
+The ODE REST interface is a simple web-based interface allowing external users and tools to 
+access the ODE metadata and products.  The current interface only supports GET functions.  The 
+basic format of the query is: 
+https://oderest.rsl.wustl.edu/live2?query=querytype&queryparam=value&queryparam2=valu
+e2&.... 
+This simple query returns a variety of data such as a list of products, product metadata, product 
+footprints, product browse images, or even the product themselves.  The returns are normally in 
+XML or JSON format unless otherwise noted. 
+The query format breaks down into several components: 
+ Address 
+ Query Type 
+ Output Format 
+ Query Parameters 
+Note, the order of the parameters does not matter. 
+2.1 
+Address 
+To support the introduction of this version of the REST interface and a slow decommissioning 
+of the previous version, the live ODE REST interface uses the “live2” address.  
+Table 1 - ODE REST Address 
+Address 
+Contents (Please check ODE holdings for a complete and 
+updated list) 
+https://oderest.rsl.wustl.edu/live2?... 
+ODE REST V2x Interface 
+2.2 
+Query Type 
+There are several query types.  Each type uses different parameters and returns different types 
+of data.  Each query to the REST interface can only execute one query type.  To set the query type, 
+one includes the query=querytype parameter.  For example: 
+https://oderest.rsl.wustl.edu/live2?query=product...  
+Table 2 - ODE REST Query Types 
+Query Type 
+Results 
+query=product  
+query=p 
+q=p 
+Returns a count and/or a list of products with selected product metadata that meet the query 
+parameters. 
+query=browse 
+query=b 
+q=b 
+Returns the ODE browse image for the first product that meets the query parameters. 
+query=thumbnail 
+Returns the ODE thumbnail image for the first product that meets the query parameters. 
+
+ 
+ODE REST Interface Manual 
+ 
+   
+   02/19/24 
+Page 13 
+ 
+ 
+query=t 
+q=t 
+query=coveragekml 
+q= coveragekml 
+Return the product(s) coverage footprints in a single KML file. 
+query=coveragezip 
+q= coveragezip 
+Return the product(s) coverage footprints in a single shapefile in zip format. 
+query=coveragetargz 
+q= coveragetargz 
+Return the product(s) coverage footprints in a single shapefile in tar.gz format. 
+query=iipt 
+q=iipt 
+query=i 
+q=i 
+Return a list of ODE Instrument Host Ids/Instrument Ids/Product Types.  This list is useful 
+for web sites that want to then present these as options for querying ODE. 
+query=featureclasses 
+q= featureclasses 
+Get a list of feature classes or types 
+query=featurenames 
+q=featurenames 
+Get a list of feature names for a give feature class or type 
+query=featuredata 
+q=featuredata 
+Get the lat/lon bounding for a given feature name 
+ 
+2.3 
+Query Parameters 
+Most of the remaining parameters define the metadata query parameters.  These vary 
+depending on the query type. Example: 
+https://oderest.rsl.wustl.edu/live2?target=mars&query=product&results=c&output=XML&pt
+=RDR&iid=HiRISE&ihid=MRO 
+Please see the appropriate query type sections below for details of the remaining parameters. 
+2.4 
+Query Output 
+Depending on the query type, an ODE REST query returns either an XML/JSON string or data 
+in a specific format such as PNG.  The XML/JSON string may be a complete return or an error 
+message.  All query types return an XML/JSON string if there is an error.  Some query types 
+such as “browse” and “thumbnail” will only return an XML/JSON string if there is an error, 
+otherwise returning a file such as a PNG image.  Others, such as “product” always return an 
+XML/JSON string.   
+One can specify the output format as either XML or JSON (the default is XML).  In addition, 
+one can indicate a JSONP callback function. 
+XML output format example: 
+https://oderest.rsl.wustl.edu/ live2?query=product&output=XML... 
+JSON output format example: 
+https://oderest.rsl.wustl.edu/ live2?query=product&output=JSON... 
+
+ 
+ODE REST Interface Manual 
+ 
+   
+   02/19/24 
+Page 14 
+ 
+ 
+JSON output format and a jsonp callback example: 
+https://oderest.rsl.wustl.edu/ live2?query=product&output=JSON&jsonp=?... 
+Table 3 – Output Format Parameters 
+QueryParam 
+Notes 
+output= or o= 
+Controls the return format for product queries or error messages.  Valid values: 
+ 
+XML ( or X) (default) 
+ 
+JSON (or J) 
+jsonp 
+Defines a JPSONP callback function (only valid if output=JSON) 
+ 
+Output Examples: 
+ 
+Successful Product Query for IDs - XML Return 
+ 
+Query for a specific 
+HiRISE Anaglyph based 
+on PDS ID with XML 
+output 
+https://oderest.rsl.wustl.edu/live2/?target=mars&query=product&
+results=op&output=XML&pt=ANAGLY&iid=HiRISE&ihid=M
+RO&pdsid=ESP_011310_1395_ESP_011811_1395_RED_ANA
+GLYPH 
+ 
+<ODEResults> 
+<Status>Success</Status> 
+<QuerySummary> 
+<Date>2021-06-18T11:16:33.105</Date> 
+<output>XML</output> 
+<query>PRODUCT</query> 
+<results>OP</results> 
+<pdsid>ESP_011310_1395_ESP_011811_1395_RED_ANAGLYPH</pdsid> 
+<ihid>MRO</ihid> 
+<iid>HiRISE</iid> 
+<pt>ANAGLY</pt> 
+<target>mars</target> 
+<Query_Elapsed_Time>00:00:00</Query_Elapsed_Time> 
+</QuerySummary> 
+<Products> 
+<Product> 
+<ode_id>26730996</ode_id> 
+<pdsid>ESP_011310_1395_ESP_011811_1395_RED_ANAGLYPH</pdsid> 
+<ihid>MRO</ihid> 
+<iid>HIRISE</iid> 
+<pt>ANAGLY</pt> 
+<Label_product_type>ANAGLYPH</Label_product_type> 
+<Data_Set_Id>MRO-M-HIRISE-3-RDR-V1.1</Data_Set_Id> 
+<PDSVolume_Id>MROHR_0001</PDSVolume_Id> 
+<RelativePathtoVol> 
+ extras\anaglyph\esp\orb_011300_011399\esp_011310_1395_esp_011811_1395\ 
+</RelativePathtoVol> 
+<LabelFileName>esp_011310_1395_esp_011811_1395_red.jp2</LabelFileName> 
+<Product_creation_time>0000-00-00T00:00:00.000</Product_creation_time> 
+<Target_name>MARS</Target_name> 
+</Product> 
+</Products> 
+</ODEResults> 
+ 
+Successful Product Query for Count XML Return: 
+
+ 
+ODE REST Interface Manual 
+ 
+   
+   02/19/24 
+Page 15 
+ 
+ 
+Query for the count of 
+HiRISE Anaglyphs 
+having a specific PDS ID 
+pattern with XML output 
+https://oderest.rsl.wustl.edu/live2/?target=mars&query=product&
+results=c&output=XML&pt=ANAGLY&iid=HiRISE&ihid=MR
+O&pdsid=ESP_01131* 
+ 
+<ODEResults> 
+<Status>Success</Status> 
+<QuerySummary> 
+<Date>2021-06-18T11:33:41.242</Date> 
+<output>XML</output> 
+<query>PRODUCT</query> 
+<results>C</results> 
+<pdsid>ESP_01131%</pdsid> 
+<ihid>MRO</ihid> 
+<iid>HiRISE</iid> 
+<pt>ANAGLY</pt> 
+<target>mars</target> 
+<Query_Elapsed_Time>00:00:00.0156146</Query_Elapsed_Time> 
+</QuerySummary> 
+<Count>2</Count> 
+</ODEResults> 
+ 
+Example Error XML Return: 
+<ODEResults> 
+  <status>ERROR</status>   
+  <error>Unable to Connect to ODE Metadata Database</error>   
+</ODEResults> 
+ 
+ 
+Successful Product Query for IDs - JSON Return 
+ 
+Query for a specific 
+HiRISE Anaglyph based 
+on PDS ID with JSON 
+output 
+https://oderest.rsl.wustl.edu/live2/?target=mars&query=product&
+results=op&output=JSON&pt=ANAGLY&iid=HiRISE&ihid=M
+RO&pdsid=ESP_011310_1395_ESP_011811_1395_RED_ANA
+GLYPH 
+ 
+
+ 
+ODE REST Interface Manual 
+ 
+   
+   02/19/24 
+Page 16 
+ 
+ 
+ 
+ 
+Successful Product Query for Count JSON Return: 
+Query for the count of 
+HiRISE Anaglyphs 
+having a specific PDS ID 
+pattern with JSON output 
+https://oderest.rsl.wustl.edu/live2/?target=mars&query=product&
+results=c&output=JSON&pt=ANAGLY&iid=HiRISE&ihid=MR
+O&pdsid=ESP_01131* 
+ 
+ 
+ 
+
+ 
+ODE REST Interface Manual 
+ 
+   
+   02/19/24 
+Page 17 
+ 
+ 
+ 
+Example Error JSON Return: 
+ 
+Query example to output 
+an error message with 
+JSON output 
+https://oderest.rsl.wustl.edu/live2/?target=mars&query=product&r
+esults=c&output=JSON&pt=ANAGLY&iid=HiRISEs&ihid=MR
+O&pdsid=ESP_01131* 
+ 
+ 
+ 
+ 
+ 
+Table 4 – Common Query Results (returned whenever an XML/JSON string is returned) 
+Tag 
+RESULT 
+Value 
+<Status> 
+All 
+SUCCESS 
+ERROR 
+<Error> 
+All Optional 
+Error String (Valid only is Status = ERROR) 
+ 
+ 
+
+ 
+ODE REST Interface Manual 
+ 
+   
+   02/19/24 
+Page 18 
+ 
+ 
+2.6 
+WKT Format 
+The “Well Know Text” or WKT format is used for both input query parameters and output 
+footprint locations.  WKT is a standard for coding shapes.  More information can be found at 
+https://en.wikipedia.org/wiki/Well-known_text.  Product footprints are typically encoded at single 
+or multi-polygons but a few are line formats.   
+3 
+PRODUCT INFORMATION QUERIES 
+Product information queries (product, lgbrowse, browse, thumbnail, coveragekml, and 
+coveragezip) return information about one or more products.  Product information queries access 
+ODE’s meta-database and returns either information about found products, the products browse or 
+thumbnail image, or the product in an alternative format.  There are several common parameters 
+used for product information queries. 
+Table 5 – Common Product Query Setup Parameters 
+QueryParam 
+Notes 
+query=product 
+q=product 
+results={c o p m f b t l}  or {x} 
+r={c o p m f b t l} or {x} 
+where a query can be a 
+combination of these letters.   
+Example: 
+query=product&results=opb 
+Returns XML or JSON 
+For each product found return the following data  
+c  - Count of products (default return if results parameter not included) 
+o - ODE Product Id.  This id is useful for subsequent REST calls.  NOTE: the ODE Id is 
+generally stable but can be changed if there is a major update of a given data set.  In 
+general, this id should only be used shortly after being obtained. 
+p - PDS Product Identifies  (Product Id, Instrument host id, Instrument id, ODE Product 
+type, Data set id. PDS4 products include Product LID, Bundle LID, and Collection LID) 
+m - Product metadata 
+f - Product files 
+b - Browse Image (NOTE: This is not the same as the browse query – this returns the 
+browse image as a base 64 string, the browse query returns a PNG image) 
+t - Thumbnail Image (NOTE: This is not the same as the thumbnail query – this 
+returns the thumbnail image as a base 64 string, the thumbnail query returns a PNG 
+image) 
+l - Complete PDS Label – For PDS3 products, each label line will be returned. PDS4 
+XML labels cannot be embedded and still create a well formed XML result, so a pointer 
+to the PDS4 XML label will be returned, which is the same as the label pointer in the 
+metadata results. Examples are listed in section 3.3.1 under example queries. 
+x –Single Product Footprint (based on the “Proj” value – see below). NOTE: You must 
+include a PDSID or ODEID when using the ‘x’ result type.  Failure to do so will result 
+in incomplete data.  Note: If included, all other result types are ignored.   Note: Only 
+the first PDSID or ODEID is returned.  All other IDs are ignored. 
+query=lgbrowse 
+Returns either: 
+XML/JSON - Unable to find products 
+PNG - ODE Large Browse Image (this is the largest browse image available – usually used 
+for the ODE Web Site zoom image).  Returns the normal browse image is a larger browse 
+image is not available. 
+NOTE: Return limited to first product 
+query=browse 
+Returns either: 
+XML/JSON - Unable to find products 
+
+ 
+ODE REST Interface Manual 
+ 
+   
+   02/19/24 
+Page 19 
+ 
+ 
+PNG - ODE Browse Image 
+NOTE: Return limited to first product 
+query=thumbnail 
+Returns either: 
+XML/JSON - Unable to find products 
+PNG - ODE Thumbnail Image 
+NOTE: Return limited to first product 
+query=coveragekml 
+q= coveragekml 
+Return the product(s) coverage footprints in a single KML file. 
+query=coveragezip 
+q= coveragezip 
+Return the product(s) coverage footprints in a single shapefile in zip format. 
+query=coveragetargz 
+q= coveragetargz 
+Return the product(s) coverage footprints in a single shapefile in tar.gz format. 
+odemetadb= 
+Select an ODE Meta DB.  ODE has four meta-databases, Mars, Moon, Mercury, and 
+Venus.  If this parameter is set, the query is restricted to the particular meta-database.  If 
+not, ODE determines which meta-database by the Target and/or IHID parameters.  If you 
+do not include the target parameter or the target parameter is not “mars”, “phobos”, 
+“deimos”, “moon”, “lunar”, “venus”, or “mercrury”, then the database is determined by the 
+IHID.  If the IHID parameter is also not included, then all ODE meta-databases are 
+queried.  Obviously this have a performance impact.  Please see the IIPT query to get a list 
+of valid targets per instrument host/instrument/product type. 
+Mars - Contains MRO, MGS, Odyssey, MEX, VO mission data 
+Moon – Contains LRO, Lunar Orbiter, Clementine, Chandrayaan-1, and Lunar Prospector 
+Data 
+Mercury – Contains all MESSENGER data 
+Venus - Contains Magellan mission data and data from MESSENGER that targeted Venus 
+limit=# 
+Limit the return to # number of products.  Note: Browse/thumbnail queries are limited 
+to 1 product no matter what the limit parameter is set to. Default is 100 for product 
+queries and 1 for browse and thumbnail queries. 
+offset=# 
+Offset the returned products to the given value. A 0 value will return the first product 
+results, a 1 value will return the second value, a 2 value will return the third value, etc. 
+By doing repeated queries and incrementing the offset value, one can move through a 
+result list longer than the limit. 
+proj= 
+Returned Footprint Projection (used for results option x) 
+c0 – Cylindrical Center Lon 0 (-180 to 180) 
+c180 – Cylindrical Center Lon 180 ( 0 to 360) 
+np – North Polar Stereographic 
+sp – South Polar Stereographic 
+g – Global 
+See ODE Help’s Coordinate System page for a complete discussion of footprints 
+order= 
+Order the returned values (note, this will impact performance) 
+oba – Order by observation time from earliest to latest 
+obd – Order by observation time from latest to earliest 
+cta – Order by creation time from earliest to latest 
+
+ 
+ODE REST Interface Manual 
+ 
+   
+   02/19/24 
+Page 20 
+ 
+ 
+ctd – Order by creation time from latest to earliest 
+c0ftsizea – Order by cylindrical center lon 0 footprint size from smallest to largest 
+c0ftsized – Order by cylindrical center lon 0 footprint size from largest to smallest 
+c180ftsizea – Order by cylindrical center lon 180 footprint size from smallest to largest 
+c180ftsized – Order by cylindrical center lon 180 footprint size from largest to smallest 
+npftsizea – Order by north polar stereographic footprint size from smallest to largest 
+npftsized – Order by north polar stereographic footprint size from largest to smallest 
+spftsizea – Order by south polar stereographic footprint size from smallest to largest 
+spftsized – Order by south polar stereographic footprint size from largest to smallest 
+ 
+The product information queries require a query type parameter (query=) and either; the 
+combination instrument host id (IHID), instrument id (IID), and product type (PT) parameters 
+(referred to as an “IIPT” set – see section 0); the PDSID parameter; the ODEID parameter; the 
+PDS4 Product LID; or the PDS4 Collection LID.     
+Table 6 - Common Product Query Parameters 
+QueryParam 
+Notes 
+odeid= 
+ODE Internal Id.  Wildcards are not supported.  NOTE: when using the ODEID parameter, 
+all other query limits listed in Table 7 are ignored. 
+Multiple ODE internal ids may be queried at the same time using the form 
+odeid=id_|id_2|… where a vertical bar separates the ode ids 
+pdsid= 
+productid= 
+PDS Product Id(s).  Wildcards (*) are allowed.  NOTE: when using the PDSID parameters, 
+all query limits listed Table 7 are applied if and only it is included with IHID, IID, and 
+PT parameters.  If the query does not have IHID, IID, and PT parameter, then all other 
+query limits listed in Table 7 are ignored. 
+productLid= 
+PDS4 Product LID(s).  Wildcards (*) are allowed. If the productlid is provided, the IHID, 
+IID, and PT parameters are optional. The query limits listed in Table 7 are still used. 
+ihid= 
+Instrument host id.  All spaces will be removed.  Wildcards are not supported. The best 
+way to get the list of valid instrument host ids is to look at the ODE web site or use the 
+IIPT query discussed below.  Note, users are discouraged from using the MSL Landing 
+Site instrument hosts or products.  They are very specialized and do not easily translate for 
+the REST interface.  As of 3/14, the list of valid instrument host ids is: 
+ 
+mro 
+ 
+mex 
+ 
+ody 
+ 
+mgs 
+ 
+vo 
+ 
+lro 
+ 
+ch1-orb 
+ 
+clem 
+ 
+lp 
+ 
+lo 
+ 
+grail 
+ 
+mgn 
+ 
+messenger 
+ 
+iid= 
+Instrument id.  All spaces will be removed.  See ODE for valid instrument ids or use the 
+IIPT query discussed below.  Wildcards are not supported.  Note, users are strongly 
+
+ 
+ODE REST Interface Manual 
+ 
+   
+   02/19/24 
+Page 21 
+ 
+ 
+discouraged from using the MSL Landing Site instruments or products.  They are very 
+specialized and do not easily translate for the REST interface.   
+pt= 
+Product type.  All spaces will be removed.  See ODE for valid product types or use the 
+IIPT query discussed below.  Wildcards are not supported.  In addition, there are several 
+special query product types: 
+TRDRDDR – Return CRISM TRDRs with their corresponding DDRs  
+TRDRFRT – Return CRISM FRT, HRL, HRS, FRS, ATO, ATU TRDRs 
+TRDRDDRFRT – Return CRISM FRT, HRL, HRS, FRS, ATO, ATU TRDRs with their 
+corresponding DDRs  
+TRDRFRT07 - Return CRISM Center Swath I/F FRT, HRL, HRS, FRS, ATO, ATU 
+TRDRs 
+TRDRDDRFRT07 - Return CRISM Center Swath I/F FRT, HRL, HRS, FRS, ATO, ATU 
+TRDRs with their corresponding DDRs  
+TRDRMSP – Return CRISM MSP, MSW, HSV, HSP, MSV TRDRs 
+TRDRDDRMSP – Return CRISM MSP, MSW, HSV, HSP, MSV TRDRs with their 
+corresponding DDRs  
+TRDREPF – Return CRISM EPF, TOD TRDRs 
+TRDRDDREPF – Return CRISM EPF, TOD TRDRs with their corresponding DDRs  
+TRDRLMB – Return CRISM LMB TRDRs  
+TRDRLDRLMB – Return CRISM LMB TRDRs with their corresponding LDRs 
+TRDRFFC – Return CRISM FFC TRDRs  
+TRDRDDRFFC – Return CRISM FFC TRDRs with their corresponding DDRs 
+collectionLid= 
+PDS4 Collection LID(s).  Wildcards (*) are allowed.  If submitted, the IHID, IID, and PT 
+parameters are optional. The query limits listed in Table 7 are still used. 
+ 
+Table 7 lists parameters that can further limit the query. The paramaters from Table 7 are used 
+if the productLid, collectionLid, or a valid IIPT set are submitted. An error message will be 
+returned if an invalid IIPT is submitted. Also, invalid filter fields are ignored if an IIPT does not 
+support a provided parameter. For example, ODE ignores an emission angle query parameter if 
+the set that does not have emissions angles such as MRO SHARAD EDRs. The limits are ignored 
+for an ODEID query.  The limits are also ignored for a PDSID query when no IIPT set is included. 
+Table 7- Common Product Query Limit Parameters 
+QueryParam 
+Notes 
+target= 
+t= 
+PDS target name.   Valid target names include “mars”, “mercury”, “venus”, and “moon” as 
+well as a variety of others such as “phobos”.  Please see the IIPT query to get a list of valid 
+target names per instrument host id / instrument id / product type.   
+ 
+dsid= 
+PDS Data set id.  All spaces will be removed.  Wildcards (*) are allowed. 
+bundleLid= 
+PDS4 Bundle LID(s).  Wildcards (*) are allowed.  
+loc= 
+Limit query based on requested location bounding box or the requested footprint.  See 
+section 3.1. (NOTE: Only valid with PDSId or IIPT query where the IIPT set has valid 
+footprints) 
+featurename= 
+Set the bounding box by a feature name.  See section 3.1.1 
+
+ 
+ODE REST Interface Manual 
+ 
+   
+   02/19/24 
+Page 22 
+ 
+ 
+westernlon= or westlon= 
+Bounding box western longitude.  See section 3.1. 
+easternlon= or eastlon= 
+Bounding box eastern longitude.  See section 3.1. 
+minlat= 
+Bounding box minimum latitude.  See section 3.1. 
+maxlat= 
+Bounding box maximum latitude.  See section 3.1. 
+footprint= 
+Request products that overlap with this footprint.  See section 3.1. 
+minobtime= 
+Minimum observation time in UTC format (can be a partial format such as 2012-04-03) 
+NOTE: If maxobtime is not included, then the search will be limited to products that match 
+the partial or full observation time.  If maxobtime is included, then the search will be 
+limited to products between the minobtime and the maxobtime. 
+maxobtime= 
+Maximum observation time in UTC format (can be a partial format such as 2012-04-03) 
+mincreationtime= 
+Minimum creation time in UTC format (can be a partial format such as 2012-04-03) 
+NOTE: If maxcreationtime is not included, then the search will be limited to products that 
+match the partial or full observation time.  If maxcreationtime is included, then the search 
+will be limited to products between the mincreationtime and the maxcreationtime. 
+maxcreationtime= 
+Maximum creation time in UTC format (can be a partial format such as 2012-04-03) 
+minemangle= 
+Minimum Emission Angle (See ODE Web Site, Data Product Search to see which datasets 
+have valid observation angles). 
+maxemangle= 
+Maximum Emission Angle (See ODE Web Site, Data Product Search to see which datasets 
+have valid observation angles). 
+mininangle= 
+Minimum Incidence Angle (See ODE Web Site, Data Product Search to see which datasets 
+have valid observation angles). 
+maxinangle= 
+Maximum Incidence Angle (See ODE Web Site, Data Product Search to see which 
+datasets have valid observation angles). 
+minphangle= 
+Minimum Phase Angle (See ODE Web Site, Data Product Search to see which datasets 
+have valid observation angles). 
+maxphangle= 
+Maximum Phase Angle (See ODE Web Site, Data Product Search to see which datasets 
+have valid observation angles). 
+minsollon= 
+Minimum Solar Longitude Angle (See ODE Web Site, Data Product Search to see which 
+datasets have valid solar longitude values). 
+maxsollon= 
+Maximum Solar Longitude Angle (See ODE Web Site, Data Product Search to see which 
+datasets have valid solar longitude values). 
+ 
+3.1 
+Product Location Queries  
+There are two ways to query for products based on location.  First, one can limit to products 
+via a “bounding box”.  This is specified by including the westerlon, easterlon, minlat, and maxlat 
+query parameters.  The second is to include an area footprint in WKT form (see section 2.5 for a 
+discussion of WKT formats).  If a footprint is included, then the bounding box is ignored unless 
+“loc=b” (see below). 
+In addition to bounding box vs footprints, the REST interface allows a user to select how 
+products are matches using the “loc” parameter.  Products can be selected: 
+Table 8 – “Loc” Query Parameter Options 
+QueryParam 
+Notes 
+loc=b  
+Input bounding box intersects a product’s bounding box 
+
+ 
+ODE REST Interface Manual 
+ 
+   
+   02/19/24 
+Page 23 
+ 
+ 
+loc=f 
+Input bounding box / footprint intersects a product’s footprint (Default) 
+loc=o 
+Input bounding box / footprint contains a product’s footprint 
+loc=i 
+Input bounding box / footprint is contained by a product’s footprint 
+In general, intersecting an input bounding box to a product’s bounding box (“loc=b”) 
+will be significantly faster as the complexity of the query is significantly reduced.   Using 
+“loc=b” with an input bounding box can significantly improve performance on some data sets but 
+will result in a products that really do not intersect the requested area.  This depends on the nature 
+of the product footprints.  Small, generally rectangular footprints (example HiRISE) will not show 
+much different but larger, irregular footprints (example MOC Wide Angle) can show significant 
+differences, particularly near the poles. Using an input footprint or matching against a product 
+footprint will be generally slower but more accurate. 
+Notes: 
+1) A requested bounding box is not valid unless all parameters (the minlat, maxlat, 
+westernlon, and easterlon) are given.  If any one of the parameters is missing, the 
+requested bounding box is ignored. 
+2) If a requested bounding box or a requested footprint is given and no “loc” parameter is 
+given, the default to “loc=f” 
+3) All latitudes are planetocentric 
+4) All longitude are positive east 0-360 
+5) Bounding boxes may cross the meridian 
+6) A bounding box may be a point or line but will not return results if loc=o 
+See section 3.3.1 for examples of both bounding box and footprint queries with different loc= 
+parameters. 
+ 
+3.2 
+Footprint (WKT) Queries 
+Footprint queries offer a way to query irregular shapes.  However, it is a fairly limited 
+capability.  The footprint queries use SQL Server Geometry intersections with simple cylindrical 
+center longitude 180 projections.  In other words, think of the query on a simple cylindrical map 
+with longitudes from 0 to 360 and latitudes from -90 to 90.  As such, it currently does not handle 
+queries across the zero meridian or poles well. 
+Queries that cross the zero meridian should be broken into multiple polygons.  For example: 
+POLYGON((359 0, 1 0, 1 1, 359 1, 359 0)) 
+should be : 
+MULTIPOLYGON(((359 0, 360 0, 360 1, 359 1, 359 0)),((0 0, 0 1, 1 1, 1 0, 0 0))) 
+Queries that cross the poles should include points along the top or bottom of the map.  For example, 
+a query over the north pole should include points at 90 degrees latitude: 
+POLYGON((89 89, 91 89, 269 89, 271 89, 89 89)) 
+should be : 
+
+ 
+ODE REST Interface Manual 
+ 
+   
+   02/19/24 
+Page 24 
+ 
+ 
+POLYGON((89 89, 91 89, 91 90, 269 90, 269 89, 271 89, 271 90, 89 90, 89 89)) 
+3.3 
+Product Query Results 
+A product query returns a count and/or a set of product metadata based on the input query 
+parameters.  NOTE: not all meta-data is available for all products.  ODE extracts the meta-data 
+from the product label and, in some cases, from the archive index table.  Result fields marked as 
+‘(If Available)’ indicate fields that may not exist for a given product. 
+Table 9 – Product Query Results 
+Tag 
+RESULT 
+Value 
+<Product> 
+P 
+A node for all information related to a given 
+product 
+<Product><Count> 
+PC 
+Count of the number of products found for this 
+query 
+<Product><ode_id> 
+PO 
+An internal ODE product identifier.  NOTE: 
+This id is assigned by ODE when the product is 
+added to the ODE metadata database.  It is 
+generally stable but can be changed when the 
+ODE metadatabase is rebuilt.  In general, this id 
+should only be used shortly after acquisition. 
+<Product><pdsid> 
+PP 
+PDS Product Id 
+<Product><ihid> 
+PP 
+Instrument host id.  See ODE for valid 
+instrument host ids 
+<Product><iid> 
+PP 
+Instrument id.  See ODE for valid instrument ids 
+<Product><pt> 
+PP 
+ODE Product type.  This is ODE's product type.  
+In general, it is obtained from the label but can 
+be changed or depending on whether a label has 
+a product type, whether there are other products 
+in the same instrument with the same product 
+type in the label, etc.  If this is not the same 
+product type as in the label, the return will 
+include a Label_Product_Type value as well. 
+<Product><Label_Product_Type> 
+PP (If Available) 
+Label product type (if it exists in the label and is 
+different from the ODE_Product_Type) 
+<Product><Data_set_id> 
+PP 
+PDS Data Set Id 
+<Product><PDSVolume_id> 
+PP 
+Volume Id 
+<Product><RelateivePathToVol> 
+PP 
+The relative path from the volume root to the 
+product label file 
+<Product><LabelFileName> 
+PP 
+The file name of the product label 
+<Product><Product_creation_time> 
+PP 
+Product creation time (UTC) 
+<Product><Target_name> 
+PP 
+Product target (example: Mars) 
+<Product><Product_version_id> 
+PP 
+Product version 
+<Product><Product_lid> 
+PP (If Available) 
+PDS4 Product LID (only for PDS4 products) 
+<Product><Bundle_lid> 
+PP (If Available) 
+PDS4 Bundle LID (only for PDS4 products) 
+<Product><Collection_lid> 
+PP (If Available) 
+PDS4 Collection LID (only for PDS4 products) 
+<Product><Observation_id> 
+PM (If Available) 
+Identifies a scientific observation within a data 
+set. 
+<Product><Observation_number> 
+PM (If Available) 
+Monotonically increasing ordinal counter of the 
+EDRs generated for a particular 
+OBSERVATION_ID.  
+<Product><Observation_type> 
+PM (If Available) 
+Identifies the general type of an observation. 
+<Product><Producer_id> 
+PM (If Available) 
+Producer id 
+<Product><Product_name> 
+PM (If Available) 
+Product name 
+<Product><Product_release_date> 
+PM (If Available) 
+Product release date 
+<Product><Activity_id> 
+PM (If Available) 
+Label Activity id 
+<Product><Predicted_dust_opacity> 
+PM (If Available) 
+Predicted dust opacity 
+<Product>< Predicted_dust_opacity_text> 
+PM (If Available) 
+Predicted dust opacity text.   
+
+ 
+ODE REST Interface Manual 
+ 
+   
+   02/19/24 
+Page 25 
+ 
+ 
+<Product><Observation_time> 
+PM (If Available) 
+Observation time (mid-point between the start 
+and end of the observation) 
+<Product><SpaceCraft_clock_start_count> 
+PM (If Available) 
+Spacecraft clock start 
+<Product><SpaceCraft_clock_stop_count> 
+PM (If Available) 
+Spacecraft clock end 
+<Product><Start_orbit_number> 
+PM (If Available) 
+Start orbit number 
+<Product><Stop_orbit_number> 
+PM (If Available) 
+End orbit number 
+<Product><UTC_start_time> 
+PM (If Available) 
+Observation start time in UTC 
+<Product><UTC_stop_time> 
+PM (If Available) 
+Observation end time in UTC 
+<Product><Emission_angle> 
+PM (If Available) 
+Emission angle 
+<Product><Emission_angle_text> 
+PM (If Available) 
+Emission angle text from the product label 
+<Product><Phase_angle> 
+PM (If Available) 
+Phase angle 
+<Product><Phase_angle_text> 
+PM (If Available) 
+Phase angle text from the product label 
+<Product><Incidence_angle> 
+PM (If Available) 
+Incidence angle 
+<Product><Incidence_angle_text> 
+PM (If Available) 
+Incidence angle text from the product label 
+<Product><Map_resolution> 
+PM (If Available) 
+Map resolution 
+<Product><Map_resolution_text> 
+PM (If Available) 
+Map resolution text from the product label 
+<Product><Map_scale> 
+PM (If Available) 
+Map scale 
+<Product><Map_scale_text> 
+PM (If Available) 
+Map scale text from the product label 
+<Product><Solar_distance> 
+PM (If Available) 
+Solar distance 
+<Product>< Solar_distance _text> 
+PM (If Available) 
+Solar distance text from the product label 
+<Product><Solar_longitude> 
+PM (If Available) 
+Solar longitude 
+<Product><Center_georeferenced> 
+PM (If Available) 
+T if the product has a footprint center 
+<Product><Center_latitude> 
+PM (If Available) 
+Planetocentric footprint center latitude 
+<Product><Center_longitude> 
+PM (If Available) 
+Longitude 0-360 center longitude 
+<Product><Center_latitude_text> 
+PM (If Available) 
+Text found in the center latitude label keyword 
+if the center latitude is not a valid number 
+<Product><Center_longitude_text> 
+PM (If Available) 
+Text found in the center longitude label keyword 
+if the center longitude is not a valid number 
+<Product><BB_georeferenced> 
+PM (If Available) 
+T if the product has a footprint bounding box 
+<Product><Easternmost_longitude> 
+PM (If Available) 
+Longitude 0-360 Easternmost longitude of the 
+footprint 
+<Product><Maximum_latitude> 
+PM (If Available) 
+Planetocentric maximum latitude of the footprint 
+<Product><Minimum_latitude> 
+PM (If Available) 
+Planetocentric minimum latitude of the footprint 
+<Product><Westernmost_longitude> 
+PM (If Available) 
+Longitude 0-360 Westernmost longitude of the 
+footprint 
+<Product><Easternmost_longitude_text> 
+PM (If Available) 
+Text found in the easternmost longitude label 
+keyword if the easternmost longitude is not a 
+valid number 
+<Product><Maximum_latitude_text> 
+PM (If Available) 
+Text found in the maximum latitude label 
+keyword if the maximum latitude is not a valid 
+number 
+<Product><Minimum_latitude_text> 
+PM (If Available) 
+Text found in the minimum latitude label 
+keyword if the minimum latitude is not a valid 
+number 
+<Product><Westernmost_longitude_text> 
+PM (If Available) 
+Text found in the westernmost longitude label 
+keyword if the westernmost longitude is not a 
+valid number 
+<Product><Start_latitude> 
+PM (If Available) 
+For linestring footprint geometry, the starting 
+latitude value from the label. 
+<Product><Start_longitude> 
+PM (If Available) 
+For linestring footprint geometry, the starting 
+longitude value from the label. 
+<Product><Stop_latitude> 
+PM (If Available) 
+For linestring footprint geometry, the ending 
+latitude value from the label. 
+<Product><Stop_longitude> 
+PM (If Available) 
+For linestring footprint geometry, the ending 
+longitude value from the label. 
+<Product><Footprint_geometry> 
+PM (If Available) 
+Cylindrical projected planetocentric, longitude 
+0-360 product footprint in WKT format.  Only if 
+there is a valid footprint.  Note - this is a 
+cylindrical projected footprint.  The footprint has 
+
+ 
+ODE REST Interface Manual 
+ 
+   
+   02/19/24 
+Page 26 
+ 
+ 
+been split into multiple polygons when crossing 
+the 0/360 longitude line and any footprints that 
+cross the poles have been adjusted to add points 
+to and around the pole.  It is meant for use in 
+cylindrical projects and is not appropriate for 
+spherical displays. 
+<Product><Footprint_C0_geometry> 
+PM (If Available) 
+Planetocentric, longitude -180-180 product 
+footprint in WKT format.  Only if there is a valid 
+footprint.  Note - this is a cylindrical projected 
+footprint.  The footprint has been split into 
+multiple polygons when crossing the -180/180 
+longitude line and any footprints that cross the 
+poles have been adjusted to add points to and 
+around the pole.  It is meant for use in cylindrical 
+projects and is not appropriate for spherical 
+displays. 
+<Product><Footprint_GL_geometry> 
+PM (If Available) 
+Planetocentric, 
+longitude 
+0-360 
+product 
+footprint in WKT format.  Only if there is a valid 
+footprint.  This is not a projected footprint. 
+<Product><Footprint_NP_geometry> 
+PM (If Available) 
+Stereographic south polar projected footprint in 
+WKT format.  Only if there is a valid footprint.  
+This footprint has been projected into meters in 
+stereographic north polar projection. 
+<Product><Footprint_SP_geometry> 
+PM (If Available) 
+Stereographic south polar projected footprint in 
+WKT format.  Only if there is a valid footprint.  
+This footprint has been projected into meters in 
+stereographic south polar projection. 
+<Product><Footprints_cross_meridian> 
+PM (If Available) 
+T if the footprint crosses the 0/360 longitude line 
+<Product><Pole_state> 
+PM (If Available) 
+String of "none", "north", or "south" 
+<Product><Footprint_souce> 
+PM (If Available) 
+A brief description of where the footprint came 
+from 
+<Product><USGS_Sites><USGS_Site> 
+PM (If Available) 
+A USGS site that this product's footprint 
+partially or completely covers 
+<Product><Comment> 
+PM (If Available) 
+Any associated comment 
+<Product><Description> 
+PM (If Available) 
+Label description 
+<Product><ODE_notes><ODE_note> 
+PM (If Available) 
+A note about how data has been entered into 
+ODE 
+<Product><External_url> 
+PM (If Available) 
+URL to an external reference to the product.  
+Product type specific but usually something like 
+the HiRISE site. 
+<Product><External_url2> 
+PM (If Available) 
+URL to an external reference to the product.  
+Product type specific but usually something like 
+the HiRISE site. 
+<Product><External_url3> 
+PM (If Available) 
+URL to an external reference to the product.  
+Product type specific but usually something like 
+the HiRISE site. 
+<Product><FilesURL> 
+PM (If Available) 
+ 
+<Product><ProductURL> 
+PM (If Available) 
+ 
+<Product><LabelURL> 
+PM (If Available) 
+ 
+<Product><Product_files><Product_file><Ty
+pe> 
+PF 
+ 
+<Product><Product_files><Product_file><Fil
+eName> 
+PF 
+ 
+<Product><Product_files><Product_file><K
+Bytes> 
+PF (If Available) 
+ 
+<Product><Product_files><Product_file><U
+RL> 
+PF (If Available) 
+ 
+<Product><Product_files><Product_file><De
+scription> 
+PF (If Available) 
+ 
+<Product><Product_files><Product_file><Cr
+eation_date> 
+PF (If Available) 
+ 
+
+ 
+ODE REST Interface Manual 
+ 
+   
+   02/19/24 
+Page 27 
+ 
+ 
+<Product><browse> 
+PB (If Available) 
+If there is an ODE browse image - returns a 
+base64 string of the PNG image 
+<Product><thumbnail> 
+PT (If Available) 
+If there is an ODE thumbnail image - returns a 
+base64 string of the PNG image 
+<Product><label><line> 
+PL 
+Complete product label for PDS3 product labels 
+<Product><label><PDS4LabelURL> 
+PL 
+Pointer to PDS4 XML label for PDS4 products 
+ 
+3.3.1 Product Query Examples 
+ODE REST Interface Examples.  These examples can be run in any browser.  See section 7 for 
+python examples. 
+Type 
+Query 
+Bounding box 
+intersects product 
+bounding box 
+https://oderest.rsl.wustl.edu/live2?query=products&target=mars&results
+=c&ihid=MRO&iid=HiRISE&pt=RDRV11&minlat=0.0&maxlat=10.0&
+westernlon=1&easternlon=5&loc=b  
+Bounding box 
+intersects product 
+bounding box 
+(Input crosses 
+meridian) 
+https://oderest.rsl.wustl.edu/live2?query=products&target=mars&results
+=c&ihid=MRO&iid=HiRISE&pt=RDRV11&minlat=0.0&maxlat=10.0&
+westernlon=358&easternlon=5&loc=b  
+Bounding box 
+contains product 
+footprint 
+https://oderest.rsl.wustl.edu/live2?query=products&target=mars&results
+=c&ihid=MRO&iid=HiRISE&pt=RDRV11&minlat=0.0&maxlat=10.0&
+westernlon=1&easternlon=5&loc=f  
+Bounding box 
+contains product 
+footprint (Input 
+crosses meridian) 
+https://oderest.rsl.wustl.edu/live2?query=products&target=mars&results
+=c&ihid=MRO&iid=HiRISE&pt=RDRV11&minlat=0.0&maxlat=10.0&
+westernlon=358&easternlon=5&loc=f  
+Bounding box 
+contained by 
+product footprint 
+https://oderest.rsl.wustl.edu/live2?query=products&target=mars&results
+=c&ihid=MRO&iid=CTX&pt=EDR&minlat=-20.01&maxlat=-
+20.0&westernlon=3.0&easternlon=3.01&loc=i  
+Bounding box 
+contained by 
+product footprint 
+(Input crosses 
+meridian) 
+https://oderest.rsl.wustl.edu/live2?query=products&target=mars&results
+=c&ihid=MRO&iid=CRISM&pt=TRDR&minlat=-25&maxlat=-
+24.9&westernlon=359.99&easternlon=0.01&loc=i  
+Footprint 
+intersects product 
+footprint 
+https://oderest.rsl.wustl.edu/live2?query=products&target=mars&results
+=c&ihid=MEX&iid=HRSC&pt=REFDR3&footprint=POLYGON 
+((154.61 18.595, 155.26 13.387, 154.78 13.327, 154.11 18.535, 154.61 
+18.595))&loc=f  
+Footprint contains 
+product footprint 
+https://oderest.rsl.wustl.edu/live2?query=products&target=mars&results
+=copm&ihid=MRO&iid=HIRISE&pt=RDRV11&loc=o&footprint=POL
+YGON ((155.7 15.752, 156.3 10.953, 155.83 10.894, 155.22 15.693, 
+155.7 15.752))  
+Footprint 
+contained by 
+product footprint 
+https://oderest.rsl.wustl.edu/live2?query=products&target=mars&results
+=copm&ihid=MEX&iid=HRSC&pt=REFDR3&loc=i&footprint=POLY
+GON%20((155.638%2014.348,%20155.618%2014.346,%20155.568%2
+014.744,%20155.588%2014.747,%20155.638%2014.348))  
+
+ 
+ODE REST Interface Manual 
+ 
+   
+   02/19/24 
+Page 28 
+ 
+ 
+Details of product 
+and thumbnail 
+based on PDS 
+Product ID 
+https://oderest.rsl.wustl.edu/live2/?query=product&results=compft&proj
+=c0&output=XML&target=mars&pdsid=B09_013071_1829_XN_02N0
+21W 
+Product results 
+(top 100) based on 
+wildcard PDS 
+Product ID. 
+Results include 
+meta data and 
+thumbnails 
+https://oderest.rsl.wustl.edu/live2/?query=product&results=copmft&proj
+=c0&output=XML&target=mars&limit=100&pdsid=frt*07_if*l*trr3 
+Use of the “X” 
+Single Footprint 
+Parameter 
+https://oderest.rsl.wustl.edu/live2/?query=product&results=x&proj=c0&
+output=XML&target=mars&pdsid=FRT00016655_07_IF166L_TRR3 
+Specific PDS 
+Product ID query 
+to return product 
+meta data 
+https://oderest.rsl.wustl.edu/live2/?target=mars&query=product&results=
+opm&pdsid=ESP_011310_1395_BG12_0 
+Specific PDS 
+Product ID query 
+to return meta data 
+and label content 
+https://oderest.rsl.wustl.edu/live2/?target=moon&query=product&results
+=ml&output=XML&pdsid=M3G20081118T222604_V02_RDN 
+Specific PDS4  
+Product ID query 
+to return meta data 
+and label – PDS4 
+label URL 
+https://oderest.rsl.wustl.edu/live2/?target=mercury&query=product&resu
+lts=ml&output=XML&pdsid=grs_cs32013080zzz_tab 
+Specific PDS4 
+Product LID 
+https://oderest.rsl.wustl.edu/live2/?target=mars&query=product&results=
+opm&output=XML&productLid=urn:nasa:pds:mro_sharad_simulations:
+data:s_07483001_sim 
+PDS4 products of 
+a designated PDS4 
+collection with an 
+observation date 
+within provided 
+range 
+https://oderest.rsl.wustl.edu/live2/?target=mars&query=product&results=
+opm&output=XML&collectionLid=urn:nasa:pds:mro_sharad_simulation
+s:data&minobtime=2022-07-16T05:32:15&maxobtime=2022-07-
+19T05:17:34 
+PDS4 products 
+based on PDS4 
+collection LID and 
+product LID 
+wildcard 
+https://oderest.rsl.wustl.edu/live2/?target=mars&query=product&results=
+opm&output=XML&collectionLid=urn:nasa:pds:mro_sharad_simulation
+s:data&productLid=urn:nasa:pds:mro_sharad_simulations:data:s_07483* 
+ 
+ 
+3.4 
+Browse Query 
+The browse query (query=browse) returns a single ODE browse image in PNG format for the 
+first product found.  The browse query uses the same query parameters listed in Table 5. 
+
+ 
+ODE REST Interface Manual 
+ 
+   
+   02/19/24 
+Page 29 
+ 
+ 
+Type 
+Query 
+Example Browse 
+Query 
+https://oderest.rsl.wustl.edu/live2/?target=mars&query=browse&results=o
+pm&pdsid=ESP_011310_1395_BG12_0 
+ 
+3.5 
+Thumbnail Query 
+The thumbnail query (query=thumbnail) returns a single ODE thumbnail image in PNG format 
+for the first product found.  The browse query uses the same query parameters listed in Table 5. 
+Type 
+Query 
+Example Thumbnail 
+Query 
+https://oderest.rsl.wustl.edu/live2/?target=mars&query=thumbnail&res
+ults=opm&pdsid=ESP_011310_1395_BG12_0 
+ 
+3.6 
+Large Browse Query 
+The large browse query (query=lgbrowse) returns a single ODE large browse image in PNG 
+format for the first product found.  Only valid for products with large browse images such as 
+HiRISE.  The browse query uses the same query parameters listed in Table 5. 
+Type 
+Query 
+Example Large 
+Browse Query based 
+on product ID 
+https://oderest.rsl.wustl.edu/live2/?target=mars&query=lgbrowse&resu
+lts=opm&pdsid=ESP_011310_1395_BG12_0 
+Example Large 
+Browse Query based 
+on PDS4 product 
+LID 
+https://oderest.rsl.wustl.edu/live2/?target=mars&query=lgbrowse&resu
+lts=opm&productLid=urn:nasa:pds:mro_sharad_simulations:data:s_07
+483001_sim 
+ 
+3.7 
+Product Coverage KML and Shapefile Results 
+The product coverage KML and Shapefile (query=coveragekml and query=coveragezip) 
+returns the product coverage footprints in a single KML or single Shapefile (in Zip format) for all 
+products found that have coverage footprints. To limit to just one product, set the  
+“limit=1” query parameter. The coverage query uses the same query parameters listed in Table 5.  
+Since the shapefile actually consists of several files, the shapefile returns a single Zip file 
+containing all shapefile files.  
+Warning: Footprints are projected onto the first target body found.  Merging footprints from 
+multiple target bodies (such as merging footprints for Mars and Moon) may result in odd polar 
+projected footprints! 
+3.7.1 Product Coverage KML and Shapefile Query Examples 
+ODE REST Interface Examples.  These examples can be run in any browser.  See section 7 for 
+python examples. 
+
+ 
+ODE REST Interface Manual 
+ 
+   
+   02/19/24 
+Page 30 
+ 
+ 
+Type 
+Query 
+Coverage KML 
+File (single 
+product) 
+https://oderest.rsl.wustl.edu/live2?query=coveragekml&target=mars&pd
+sid=FRT000050F2_07_DE165L_DDR1&ihid=mro&iid=crism&pt=ddr   
+Coverage KML 
+File (single 
+product) based on 
+PDS4 Product LID 
+https://oderest.rsl.wustl.edu/live2?query=coveragekml&target=mars&pro
+ductLid=urn:nasa:pds:mro_sharad_simulations:data:s_07483001_sim 
+Coverage KML 
+File (multiple 
+products) based on 
+PDS4 Product LID 
+wildcard 
+https://oderest.rsl.wustl.edu/live2?query=coveragekml&target=mars&pro
+ductLid=urn:nasa:pds:mro_sharad_simulations:data:s_07483* 
+Coverage KML 
+File (multiple 
+products) 
+https://oderest.rsl.wustl.edu/live2?query=coveragekml&target=mars&od
+eid=13005466|13005467 
+Coverage 
+Shapefile File 
+(single product) 
+https://oderest.rsl.wustl.edu/live2?query=coveragezip&target=mars&pdsi
+d=FRT000050F2_07_DE165L_DDR1&ihid=mro&iid=crism&pt=ddr   
+Coverage 
+Shapefile File 
+(single product) 
+based on PDS4 
+Product LID 
+https://oderest.rsl.wustl.edu/live2?query=coveragezip&target=mars&pro
+ductLid=urn:nasa:pds:mro_sharad_simulations:data:s_07483001_sim 
+Coverage 
+Shapefile File 
+(multiple products) 
+https://oderest.rsl.wustl.edu/live2?query=coveragezip&target=mars&ode
+id=13005466|13005467 
+Coverage 
+Shapefile File 
+(multiple products) 
+https://oderest.rsl.wustl.edu/live2?query=coveragetargz&target=mars&o
+deid=13005466|13005467 
+ 
+ 
+4 
+ “IIPT” QUERIES 
+ODE present products on an instrument host id, instrument id, and product type structure.  Each 
+unique instrument host, instrument, product type (referenced below as an “IIPT set”) stores 
+information about all products that have this instrument host, instrument, and product type.  This 
+can best be seen in the way ODE web-site presents selects on the product search page. Although 
+this is close to the PDS data set, ODE often breaks PDS data sets and product types into subgroups 
+to make searching related products easier.  The “IIPT” query returns a list of the valid instrument 
+host id/instrument id/product type sets (IIPT sets).  This is useful for web sites that wish to present 
+valid options to a user. 
+Table 10 – IIPT Query Parameters 
+QueryParam 
+Notes 
+
+ 
+ODE REST Interface Manual 
+ 
+   
+   02/19/24 
+Page 31 
+ 
+ 
+odemetadb= 
+Select an ODE Meta DB.  ODE has four meta-databases, Mars, Moon, Mercury, and 
+Venus.  If this parameter is set, the query is not restricted to any particular meta-database. 
+ 
+The IIPT query returns a list of instrument host ids/instrument ids/product types.   
+Table 11 – IIPT Query Results 
+Tag 
+Value 
+<Product> 
+A node for all information related to a given product 
+<IIPTSets> 
+ 
+< IIPTSets ><IIPTSet> 
+ 
+<IIPTSets><IIPTSet><ODEMetaDB> 
+ODE Meta DB – can be used as a Target input 
+<IIPTSets><IIPTSet><IHID> 
+Instrument Host Id 
+<IIPTSets><IIPTSet><HName> 
+Instrument Host Name 
+<IIPTSets><IIPTSet><IID> 
+Instrument Id 
+<IIPTSets><IIPTSet><IName> 
+Instrument Name 
+<IIPTSets><IIPTSet><PT> 
+Product Type 
+<IIPTSets><IIPTSet><PTName> 
+Product Type Name 
+<IIPTSets><IIPTSet><DataSetId> 
+Data Set Id 
+<IIPTSets><IIPTSet><ValidEmissionAngles> 
+T or F – Valid Emission Angles for searches 
+<IIPTSets><IIPTSet><ValidPhaseAngles> 
+T or F – Valid Phase Angles for searches 
+<IIPTSets><IIPTSet><ValidIncidenceAngles> 
+T or F – Valid Incidence Angles for searches 
+<IIPTSets><IIPTSet><ValidSolLongs> 
+T or F – Valid Solar Longitudes for searches 
+<IIPTSets><IIPTSet><ValidFootprints> 
+T or F – Valid Footprints for searches 
+<IIPTSets><IIPTSet><ValidObservationTimes> 
+T or F – Valid Observations Times for searches 
+<IIPTSets><IIPTSet><MinOrbit> 
+Minimum orbit value for all products with this instrument 
+host/instrument/product type 
+<IIPTSets><IIPTSet><MaxOrbit> 
+Maximum orbit value for all products with this instrument 
+host/instrument/product type 
+<IIPTSets><IIPTSet><MinObservationTime> 
+Minimum observation time value for all products with this 
+instrument host/instrument/product type 
+<IIPTSets><IIPTSet><MaxObservationTime> 
+Maximum observation time value for all products with this 
+instrument host/instrument/product type 
+<IIPTSets><IIPTSet><MinProductId> 
+Minimum product id value for all products with this instrument 
+host/instrument/product type 
+<IIPTSets><IIPTSet><MaxProductId> 
+Maximum product id value for all products with this instrument 
+host/instrument/product type 
+<IIPTSets><IIPTSet><NumberObservations> 
+Number of observation values found in the products (valid only for 
+selected instrument host/instrument/product types such as LOLA) 
+<IIPTSets><IIPTSet><NumberProducts> 
+Number of products with this instrument host/instrument/product 
+type 
+<IIPTSets><IIPTSet><SpecialValue1> 
+Some sets have special values unique to that set.  This is the name 
+or description of that value.  Special values capture product type 
+specific information.  For example, LRO LOLA RDRs include a 
+special value that holds the range of altimetry data.  
+<IIPTSets><IIPTSet><MinSpecialValue1> 
+Minimum special value 1 
+<IIPTSets><IIPTSet><MaxSpecialValue1> 
+Maximum special value 1 
+<IIPTSets><IIPTSet><SpecialValue2> 
+Some sets have a second special values unique to that set.  This is 
+the name or description of that value. 
+<IIPTSets><IIPTSet><MinSpecialValue2> 
+Minimum special value 2 
+<IIPTSets><IIPTSet><MaxSpecialValue2> 
+Maximum special value 2 
+<IIPTSets><IIPTSet><ValidTargets> 
+Set of valid target values for the Target query parameter for a given 
+instrument host, instrument, product type.  IIPTs are usually 
+targeted to the primary body for that ODE meta database.  Example, 
+the products in the ODE Mars meta database primarily target Mars.  
+But some IIPTs have additional targets such as DIEMOS, 
+PHOBOS, or special calibration targets.  These targets can then be 
+used in the query parameter TARGET=. 
+
+ 
+ODE REST Interface Manual 
+ 
+   
+   02/19/24 
+Page 32 
+ 
+ 
+<IIPTSets><IIPTSet><ValidTargets><ValidTarget> 
+A valid target value for the Target query parameter for a given 
+instrument host, instrument, product type. 
+4.1.1 IIPT Query Examples 
+ODE REST Interface Examples.  These examples can be run in any browser.  See section 7 for 
+python examples. 
+Type 
+Query 
+Instrument Host 
+ID, Instrument ID, 
+Product Type 
+Query 
+https://oderest.rsl.wustl.edu/live2?query=iipt     
+Instrument Host 
+ID, Instrument ID, 
+Product Type 
+Query – filtered to 
+Mars ODE 
+https://oderest.rsl.wustl.edu/live2/default.aspx?query=iipt&odemetadb=
+mars 
+5 
+FEATURE QUERIES 
+5.1 
+Feature Classes Query 
+ODE supports queries for feature classes or types.  This query returns all the recognized feature 
+classes or types used by ODE.  They are based on the USGS features. 
+Table 12 – Feature Classes Query Parameters 
+QueryParam 
+Notes 
+odemetadb= 
+Select an ODE Meta DB.  ODE has four meta-databases, Mars, Moon, Mercury, and 
+Venus.  If this parameter is set, the query is not restricted to any particular meta-database. 
+ 
+The feature query returns a list of feature classes or types.   
+Table 13 – Feature Classes Query Results 
+Tag 
+Value 
+<FeatureClasses> 
+A node for all information related to a given feature 
+<FeatureClasses>< FeatureClass> 
+Feature Class or Type 
+5.1.1 Feature Classes Query Examples 
+ODE REST Interface Examples.  These examples can be run in any browser.  See section 7 for 
+python examples. 
+Type 
+Query 
+Feature Class 
+Filtered to Mars 
+ODE 
+https://oderest.rsl.wustl.edu/live2/?query=featureclasses&odemetadb=mars 
+ 
+5.2 
+Feature Names Query 
+
+ 
+ODE REST Interface Manual 
+ 
+   
+   02/19/24 
+Page 33 
+ 
+ 
+ODE supports queries for feature names.  This query returns all the recognized features used 
+by ODE.  They are based on the USGS features. 
+Table 14 – Feature Query Parameters 
+QueryParam 
+Notes 
+odemetadb= 
+Select an ODE Meta DB.  ODE has four meta-databases, Mars, Moon, Mercury, and 
+Venus.  If this parameter is set, the query is not restricted to any particular meta-database. 
+featureclass= 
+Restrict to feature names within a given feature class or type 
+ 
+The feature query returns a list of features.   
+Table 15 – Feature Query Results 
+Tag 
+Value 
+<FeatureNames> 
+A node for all information related to a given feature 
+< FeatureNames ><FeatureName> 
+Feature Name 
+5.2.1 Feature Classes Query Examples 
+ODE REST Interface Examples.  These examples can be run in any browser.  See section 7 for 
+python examples. 
+Type 
+Query 
+Feature Name 
+Filtered to Mars 
+ODE 
+https://oderest.rsl.wustl.edu/live2/?query=featurenames&odemetadb=mars  
+ 
+5.3 
+Feature Data Query 
+ODE supports queries for feature data.  This query returns the feature data for a given feature 
+name.  They are based on the USGS features. 
+Table 16 – Feature Data Query Parameters 
+QueryParam 
+Notes 
+odemetadb= 
+Select an ODE Meta DB.  ODE has four meta-databases, Mars, Moon, Mercury, and 
+Venus.  If this parameter is set, the query is not restricted to any particular meta-database. 
+featureclass= 
+Restrict to features within a given feature class or type 
+featurename= 
+Restrict to features within a given feature name 
+ 
+The feature query returns a list of features.   
+Table 17 – Feature Data Query Results 
+Tag 
+Value 
+<Features> 
+A node for all information related to a given feature 
+<Features><Feature> 
+ 
+<Features>< Feature >< FeatureName> 
+Feature Name 
+<Features>< Feature >< FeatureType> 
+Feature Type 
+<Features>< Feature >< MinLat> 
+Min Latitude (-90 to 90) 
+<Features>< Feature >< MaxLat> 
+Max Latitude (-90 to 90) 
+
+ 
+ODE REST Interface Manual 
+ 
+   
+   02/19/24 
+Page 34 
+ 
+ 
+<Features>< Feature >< WestLon> 
+Westernmost Longitude (0 to 360) – Features can cross meridian 
+<Features>< Feature >< EastLon> 
+Easternmost Longitude (0 to 360) – Features can cross meridian 
+5.3.1 Feature Data Query Examples 
+ODE REST Interface Examples.  These examples can be run in any browser.  See section 7 for 
+python examples. 
+Type 
+Query 
+Full list of 
+Features on Mars, 
+not limited by 
+feature class 
+https://oderest.rsl.wustl.edu/live2/?query=featuredata&odemetadb=mars 
+List of Chasmata 
+on Mars 
+https://oderest.rsl.wustl.edu/live2/?query=featuredata&odemetadb=mars
+&featureclass=chasmas    
+Feature Location 
+information for 
+Chasma Australe 
+on Mars 
+https://oderest.rsl.wustl.edu/live2/?query=featuredata&odemetadb=mars
+&featureclass=chasma&featurename=Chasma%20Australe  
+ 
+6 
+PERFORMANCE 
+Query performance can be impacted by several things.  The count parameter is best used as a 
+separate query.  The queries returning product file information, browse and/or thumbnail images, 
+and complete PDS Labels will take longer.  A good practice is to query for product information 
+and then query a specific product for the file information, images, or label. 
+7 
+EXAMPLES 
+ODE REST Interface Examples.  See the previous sections for examples using a standard web 
+browser.  In addition, the ODE REST interface can be used from most programming languages.  
+For example, the REST interface can be accessed via python. Three python examples are listed 
+below. 
+
+ 
+ODE REST Interface Manual 
+ 
+   
+   02/19/24 
+Page 35 
+ 
+ 
+Python 2.7 Example of querying ODE REST for specific mission/instrument/product type count: 
+ 
+ 
+# Python 2.7 compatible version 
+# Example of querying ODE REST for matching product count 
+ 
+import urllib 
+import xml.etree.ElementTree as ET 
+ 
+#Define the query URL 
+myURL = ('https://oderest.rsl.wustl.edu/live2?query=products'  
+'&target=mars&results=c&ihid=MRO&iid=HiRISE&pt=RDRV11'  
+'&minlat=0.0&maxlat=10.0&westernlon=1&easternlon=5&loc=b') 
+ 
+#Query and read results 
+myURLReader = urllib.urlopen(myURL) 
+myResults = myURLReader.read() 
+ 
+#Parse to XML String 
+myTree = ET.fromstring(myResults) 
+ 
+#Find elements 
+myStatusElement = myTree.find('Status') 
+myCountElement = myTree.find('Count') 
+ 
+print 'Results:' 
+print '  Status: ' + myStatusElement.text 
+print '  Count:  ' + myCountElement.text 
+ 
+
+ 
+ODE REST Interface Manual 
+ 
+   
+   02/19/24 
+Page 36 
+ 
+ 
+Python 3.6 Example of querying ODE REST for specific mission/instrument/product type count: 
+ 
+ 
+# Python 3.6 compatible version 
+# Example of querying ODE REST for matching product count 
+ 
+import urllib.request 
+import xml.etree.ElementTree as ET  
+ 
+#Define the query URL 
+myURL = 'https://oderest.rsl.wustl.edu/live2?query=products' \ 
+'&target=mars&results=c&ihid=MRO&iid=HiRISE&pt=RDRV11' \ 
+'&minlat=0.0&maxlat=10.0&westernlon=1&easternlon=5&loc=b' 
+ 
+#Query and read results 
+myURLReader = urllib.request.urlopen(myURL) 
+myResults = myURLReader.read() 
+ 
+#Parse to XML String 
+myTree = ET.fromstring(myResults)  
+ 
+#Find elements 
+myStatusElement = myTree.find('Status')  
+myCountElement = myTree.find('Count')  
+ 
+print('Results:') 
+print('  Status: ' + myStatusElement.text) 
+print('  Count:  '  + myCountElement.text) 
+ 
+
+ 
+ODE REST Interface Manual 
+ 
+   
+   02/19/24 
+Page 37 
+ 
+ 
+Second Python 3.6 Example of downloading data files using links from ODE REST  
+The script is continued on the next page. 
+ 
+# Pypthon 3.6 compatible version 
+# Example of downloading data files using  
+# links from ODE REST interface 
+ 
+import sys 
+import urllib.request 
+from xml.dom import minidom 
+ 
+#set starting variables, set these values as desired 
+queryURL = "https://oderest.rsl.wustl.edu/live2/?"  #base ODE REST location (don't change) 
+target = "target=mars" 
+ 
+ 
+ 
+#set target (mars, moon, mercury, venus, phobos) 
+mission = "&ihid=MRO" 
+ 
+ 
+ 
+#set to empty string to omit 
+instrument = "&iid=HIRISE"  
+ 
+ 
+#set to empty string to omit 
+productType = "&pt=RDRV11"  
+ 
+ 
+#set to empty string to omit 
+#instrument = "&iid=CRISM"  
+ 
+ 
+#set to empty string to omit 
+#productType = "&pt=TRDR" 
+ 
+ 
+ 
+#set to empty string to omit 
+westernlon = "&westernlon=9" 
+ 
+ 
+#set to empty string to omit 
+easternlon = "&easternlon=12" 
+ 
+ 
+#set to empty string to omit 
+minlat = "&minlat=10" 
+ 
+ 
+ 
+#set to empty string to omit 
+maxlat = "&maxlat=15" 
+ 
+ 
+ 
+#set to empty string to omit 
+mincreationtime = "&mincreationtime=2016-06-01"  
+#set to empty string to omit 
+maxcreationtime = "&maxcreationtime=2017-06-30"  
+#set to empty string to omit 
+ 
+queryType = "&query=product" 
+ 
+ 
+#set to empty string to omit 
+results = "&results=f" 
+ 
+ 
+ 
+# desired results - files 
+output = "&output=XML" 
+ 
+ 
+ 
+# desired output format 
+resultLoopLimit = "&limit=10" 
+ 
+ 
+# number of products to return 
+resultOffsetNumber = 0 
+ 
+ 
+ 
+# the result offset number (in case you are paging the results) 
+resultOffset = "&offset=" 
+ 
+ 
+ 
+# the base of the offset parameters 
+limitFileTypes = "Product"  
+ 
+ 
+# set to empty string to download all file types,  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+# possible values:  Product, Browse, Derived, Referenced 
+ 
+saveFilesToThisDirectory = 'c:/temp/data/'   #location for saving the files (make sure the directory exists) 
+ 
+
+ 
+ODE REST Interface Manual 
+ 
+   
+   02/19/24 
+Page 38 
+ 
+ 
+ 
+Continued from the previous page: 
+ 
+The script is continued on the next page. 
+ 
+ 
+#Concatenate the REST Request 
+queryURL = queryURL + target + mission + instrument + productType + westernlon + easternlon + \ 
+minlat + maxlat + mincreationtime + maxcreationtime + \ 
+queryType + results + output + resultLoopLimit + resultOffset + str(resultOffsetNumber) 
+ 
+print('REST Request: ',queryURL) 
+ 
+myURLReader = urllib.request.urlopen(queryURL) 
+myResults = myURLReader.read() 
+#print(myResults) 
+ 
+#parse the ODE REST results 
+xmldoc = minidom.parseString(myResults) 
+productlist = xmldoc.getElementsByTagName('Product') 
+tempCounter = 0 
+for product in productlist: 
+ 
+tempCounter = tempCounter + 1 
+ 
+productFiles = product.getElementsByTagName('Product_file') 
+ 
+for productFile in productFiles: 
+ 
+ 
+fileType = productFile.getElementsByTagName('Type')[0] 
+ 
+ 
+url = productFile.getElementsByTagName('URL')[0] 
+ 
+ 
+local_filename = url.firstChild.data.split('/')[-1] 
+
+ 
+ODE REST Interface Manual 
+ 
+   
+   02/19/24 
+Page 39 
+ 
+ 
+Continued from the previous page: 
+ 
+ 
+ 
+ 
+ 
+if len(limitFileTypes) > 0: 
+ 
+ 
+ 
+#if you have specified a file type and it matches, download the file 
+ 
+ 
+ 
+if fileType.firstChild.data == limitFileTypes:    
+ 
+ 
+ 
+ 
+print("downloading the file:") 
+ 
+ 
+ 
+ 
+print(url.firstChild.data) 
+ 
+ 
+ 
+ 
+try: urllib.request.urlretrieve(url.firstChild.data, 
+ 
+ 
+ 
+ 
+saveFilesToThisDirectory + local_filename) 
+ 
+ 
+ 
+ 
+except urllib.error.URLError as e: 
+ 
+ 
+ 
+ 
+ 
+print(e.reason)      
+ 
+ 
+ 
+ 
+ 
+else:  # the user didn't restrict the file type to download 
+ 
+ 
+ 
+print("downloading the file:") 
+ 
+ 
+ 
+print(url.firstChild.data) 
+ 
+ 
+ 
+try: urllib.request.urlretrieve(url.firstChild.data, 
+ 
+ 
+ 
+saveFilesToThisDirectory + local_filename) 
+ 
+ 
+ 
+except urllib.error.URLError as e: 
+ 
+ 
+ 
+ 
+print(e.reason) 
+ 
+print("Downloads complete") 

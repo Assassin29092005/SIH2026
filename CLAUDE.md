@@ -53,7 +53,7 @@ The PS dataset field also says "specific datasets link will be provided - TBD". 
 
 ### Verified access, 2026-08-22
 
-Use the **PDS ODE REST API** (`https://oderest.rsl.wustl.edu/live2/`) for everything except Chandrayaan-2. Public, no key, no login. Parameter reference cached at `data/interim/ode_manual.txt` — **read it before adding any filter**, and see `BUGS.md` BUG-002 for why.
+Use the **PDS ODE REST API** (`https://oderest.rsl.wustl.edu/live2/`) for everything except Chandrayaan-2. Public, no key, no login. Parameter reference cached at `docs/ode_rest_params.txt` — **read it before adding any filter**, and see `BUGS.md` BUG-002 for why.
 
 - **Chandrayaan-2 is NOT indexed by ODE.** Only Chandrayaan-1 M3 is. CH-2 OHRC/TMC-2/IIRS requires a PRADAN account. Someone must register at [chmapbrowse](https://chmapbrowse.issdc.gov.in/) — this is a hard blocker on the source-image side and should happen immediately.
 - **LROC NAC:** `ihid=LRO&iid=LROC&pt=CDRNAC4`, 2,887,274 calibrated products, footprints and incidence angles both indexed and queryable.
