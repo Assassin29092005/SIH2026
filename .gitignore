@@ -31,3 +31,6 @@ Thumbs.db
 
 # cached reference docs (regenerate with scripts/)
 data/interim/ode_manual.pdf
+
+# model weights cache
+*.ckpt

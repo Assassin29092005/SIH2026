@@ -76,9 +76,46 @@ SIFT matching morning against evening, scored against the identity ground truth,
 
 Raw SIFT does not merely score badly across illumination — it produces **zero correct matches in 44 attempts**. With Stage B the same detector reaches 81.8% inlier rate at sub-pixel RMSE.
 
-**Known gap:** match uniformity (0.06–0.45) is poor, because rendering near the terminator leaves 44–66% of each window shadowed and therefore unusable for normalisation. The problem statement explicitly requires uniform distribution, so this is the next thing to fix, not a detail to gloss over.
+### Stage C — adding a dense matcher
 
-**A methodological caution worth recording:** global correlation between the normalised pair got *worse* (−0.318 → −0.476) in the very window where matching improved from 0 to 21 correct. Global linear correlation is a poor proxy for matchability — it measures whole-image brightness agreement, while matching depends on local structure. Had we optimised for correlation, we would have tuned Stage B in exactly the wrong direction.
+Four combinations on identical windows, scored against the identity ground truth. LoFTR uses kornia's public `outdoor` weights, trained on MegaDepth and never on a lunar image.
+
+| Method | Correct | Matches | Inlier rate | RMSE | Uniformity |
+|---|---|---|---|---|---|
+| SIFT raw | 0 | 26 | 0% | — | 0.00 |
+| SIFT + Stage B | 187 | 244 | 77% | 0.640 px | 0.44 |
+| **LoFTR raw** | **0** | **186** | **0%** | — | 0.00 |
+| **LoFTR + Stage B** | **10504** | **10510** | **100%** | **0.679 px** | **1.00** |
+
+Two conclusions, and the second is the important one:
+
+1. The dense matcher is transformative — 56× more correct matches than SIFT, at complete grid coverage. Sub-pixel RMSE and uniformity 1.00 satisfy both explicit requirements of the problem statement.
+2. **Stage B is load-bearing, not a nicety.** A modern learned dense matcher scores **0 out of 186** on raw cross-illumination lunar imagery. It fails just as completely as SIFT. Stage B is what takes it from 0% to 100%.
+
+Verified against controls, because a 100% rate deserves suspicion:
+
+| Control | Expected | Observed |
+|---|---|---|
+| Normalised pair still distinct? | not identical | corr −0.316, mean abs diff 76/255, 0.4% identical pixels |
+| Image matched against itself | ~0 displacement | 2775/2775, RMSE 0.205 |
+| Known 7 px shift | recover ±7 | +7.29 |
+| Unrelated terrain | near zero matches | 0 / 5 |
+
+### Scale invariance — the open problem
+
+Matching a full-resolution source against a decimated reference, three 1024×1024 windows:
+
+| Ratio | Effective m/px | Raw rate | Stage B rate | RMSE (coarse px) |
+|---|---|---|---|---|
+| 1× | 7.40 | 0% | **91%** | 0.63 |
+| 2× | 14.81 | 0% | 31% | 1.62 |
+| 4× | 29.61 | 1% | 14% | 3.61 |
+| 8× | 59.23 | 1% | 6% | 9.31 |
+| 16× | 118.45 | 0% | 2% | 23.00 |
+
+Stage B beats raw at every ratio but degrades sharply. **Illumination is solved; scale is not.** Closing this is the remaining work, and it is where OHRC-to-basemap matching actually lives.
+
+**A methodological caution worth recording three times over:** global correlation between the normalised pair is *negative* (−0.316) in the very window where LoFTR matches at 100%. Earlier, correlation got worse (−0.318 → −0.476) exactly where matching went from 0 to 21 correct. Global linear correlation measures whole-image brightness agreement; matching depends on local structure. Optimising Stage B against correlation would have tuned it precisely backwards.
 
 ## Data
 
