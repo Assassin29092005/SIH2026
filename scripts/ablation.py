@@ -61,26 +61,75 @@ def normalise(image: np.ndarray, rendered: np.ndarray) -> tuple[np.ndarray, np.n
 ELEVATION_CANDIDATES = (5, 10, 15, 20, 30, 45, 60)
 
 
-def best_geometry(dem, scale, lat, target, az_step=15) -> tuple[float, float, float]:
-    """Sun (azimuth, elevation) whose render correlates best with `target`.
+# Elevations to normalise at and pool matches across. Two findings drive this:
+#
+# 1. LOW sun is better despite shadowing far more of the frame. At 20 deg,
+#    92.5% of pixels survive but only 11% of matches are correct; at 5 deg,
+#    17% survive and 89% are correct. What matters is the render's CONTRAST
+#    (cv 1.02 at 5 deg vs 0.29 at 20 deg), not how many pixels it keeps -- a
+#    flat render cancels no shading.
+# 2. Pooling across elevations raises coverage, because each elevation
+#    shadows different terrain. (5, 10) roughly doubles both match count and
+#    spread versus 5 alone, at the same inlier rate.
+POOL_ELEVATIONS = (5.0, 10.0)
 
-    Two stages, because ray-marched shadows dominate the cost. Shading alone
-    ranks candidates well enough to find the neighbourhood, so the coarse pass
-    skips shadows entirely and only the shortlist pays for them.
+# Kept for the elevation study; not used by the production path.
+ELEVATION_CANDIDATES = (5, 10, 15, 20, 30, 45, 60)
+
+
+def best_azimuth_at(dem, scale, lat, target, elevation, az_step=15) -> tuple[float, float]:
+    """Azimuth whose render best correlates with `target` at a fixed elevation.
+
+    Shadows are off here: they trebled the cost without changing the ranking.
     """
-    coarse = []
-    for el in ELEVATION_CANDIDATES:
-        for az in range(0, 360, az_step):
-            r = correlate(render(dem, scale, lat, az, el, shadows=False), target)
-            coarse.append((r, float(az), float(el)))
-
-    coarse.sort(reverse=True)
-    best_az, best_el, best_r = coarse[0][1], coarse[0][2], -2.0
-    for _, az, el in coarse[:6]:
-        r = correlate(render(dem, scale, lat, az, el, shadows=True), target)
+    best_az, best_r = 0.0, -2.0
+    for az in range(0, 360, az_step):
+        r = correlate(render(dem, scale, lat, az, elevation, shadows=False), target)
         if r > best_r:
-            best_az, best_el, best_r = az, el, r
-    return best_az, best_el, best_r
+            best_az, best_r = float(az), r
+    return best_az, best_r
+
+
+def dedupe(pa: np.ndarray, pb: np.ndarray, tol: float = 3.0):
+    """Drop matches whose source keypoint duplicates one already kept."""
+    keep, seen = [], set()
+    for i, (x, y) in enumerate(pa):
+        key = (round(x / tol), round(y / tol))
+        if key not in seen:
+            seen.add(key)
+            keep.append(i)
+    return pa[keep], pb[keep]
+
+
+def stage_b_matches(dem, scale, lat, morning, evening, elevations=POOL_ELEVATIONS):
+    """Normalise at each elevation, match, and pool the results.
+
+    Both images are normalised at the SAME elevation on each pass. Their true
+    acquisition elevations differ, but normalised products are only comparable
+    when produced under matching geometry -- allowing them to differ cut correct
+    matches from 363 to 171 across the test windows.
+    """
+    all_a, all_b = [], []
+    for el in elevations:
+        az_m, _ = best_azimuth_at(dem, scale, lat, morning, el)
+        az_e, _ = best_azimuth_at(dem, scale, lat, evening, el)
+
+        norm_m, valid_m = normalise(morning, render(dem, scale, lat, az_m, el, shadows=True))
+        norm_e, valid_e = normalise(evening, render(dem, scale, lat, az_e, el, shadows=True))
+        valid = valid_m & valid_e
+
+        a8, b8 = to_uint8(norm_m, valid), to_uint8(norm_e, valid)
+        a8[~valid] = 0
+        b8[~valid] = 0
+
+        pa, pb = match_sift(a8, b8)
+        if len(pa):
+            all_a.append(pa)
+            all_b.append(pb)
+
+    if not all_a:
+        return np.zeros((0, 2)), np.zeros((0, 2))
+    return dedupe(np.vstack(all_a), np.vstack(all_b))
 
 
 def match_sift(a8: np.ndarray, b8: np.ndarray, ratio_test: float = 0.75):
@@ -169,37 +218,18 @@ def main() -> int:
 
     print(f"tile {triple.tile}  window ({row},{col}) {size}x{size}  lat {lat:.3f}\n")
 
-    az_m, el_m, r_m = best_geometry(dem, scale, lat, morning)
-    az_e, el_e, r_e = best_geometry(dem, scale, lat, evening)
-    print(f"recovered sun  morning: az={az_m:.0f} el={el_m:.0f}  r={r_m:+.3f}")
-    print(f"               evening: az={az_e:.0f} el={el_e:.0f}  r={r_e:+.3f}")
-
-    render_m = render(dem, scale, lat, az_m, el_m, shadows=True)
-    render_e = render(dem, scale, lat, az_e, el_e, shadows=True)
-
-    norm_m, valid_m = normalise(morning, render_m)
-    norm_e, valid_e = normalise(evening, render_e)
-    valid = valid_m & valid_e
-    print(f"valid (unshadowed in both): {100*valid.mean():.1f}% of window\n")
-
-    raw_corr = correlate(morning[valid], evening[valid])
-    norm_corr = correlate(norm_m[valid], norm_e[valid])
-    print("CORRELATION")
-    print(f"  raw morning vs evening        {raw_corr:+.3f}")
-    print(f"  Stage-B normalised            {norm_corr:+.3f}")
-    print(f"  swing                         {norm_corr - raw_corr:+.3f}\n")
-
-    m8, e8 = to_uint8(morning), to_uint8(evening)
-    nm8, ne8 = to_uint8(norm_m, valid), to_uint8(norm_e, valid)
-    # Suppress shadowed pixels so SIFT does not key on the mask edges.
-    nm8[~valid] = 0
-    ne8[~valid] = 0
+    for el in POOL_ELEVATIONS:
+        az_m, r_m = best_azimuth_at(dem, scale, lat, morning, el)
+        az_e, r_e = best_azimuth_at(dem, scale, lat, evening, el)
+        print(f"  el={el:>4.0f}  morning az={az_m:>3.0f} (r={r_m:+.3f})   "
+              f"evening az={az_e:>3.0f} (r={r_e:+.3f})")
+    print()
 
     print("SIFT MATCHING vs identity ground truth")
-    raw_score = score(*match_sift(m8, e8), (size, size))
+    raw_score = score(*match_sift(to_uint8(morning), to_uint8(evening)), (size, size))
     report("raw", raw_score)
-    nrm_score = score(*match_sift(nm8, ne8), (size, size))
-    report("Stage-B normalised", nrm_score)
+    nrm_score = score(*stage_b_matches(dem, scale, lat, morning, evening), (size, size))
+    report(f"Stage-B pooled {POOL_ELEVATIONS}", nrm_score)
 
     base = raw_score["inliers"][3.0]
     got = nrm_score["inliers"][3.0]
