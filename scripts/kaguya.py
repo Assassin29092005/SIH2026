@@ -111,13 +111,40 @@ def find_triples(bbox: tuple) -> dict[str, dict]:
     }
 
 
+def true_size(url: str) -> int | None:
+    """Authoritative byte size from the server, or None if it will not say.
+
+    ODE's reported KBytes is approximate -- it under-reports the Kaguya .IMG
+    files by ~2% -- so it must never be used to decide whether a download
+    finished. See BUGS.md BUG-004.
+    """
+    try:
+        resp = requests.head(url, timeout=60, allow_redirects=True)
+        resp.raise_for_status()
+        length = resp.headers.get("Content-Length")
+        return int(length) if length else None
+    except requests.RequestException:
+        return None
+
+
 def download(url: str, dest: Path, expect_kb: int | None = None) -> Path:
     """Stream a file to disk, resuming a partial download if one exists."""
     dest.parent.mkdir(parents=True, exist_ok=True)
     have = dest.stat().st_size if dest.exists() else 0
 
-    if expect_kb and have >= expect_kb * 1024 * 0.999:
-        print(f"    have {dest.name} ({have/1e6:.1f} MB)")
+    # Exact comparison against the server's own Content-Length. A file is only
+    # complete when the byte counts match exactly; anything else resumes.
+    expected = true_size(url)
+    if expected is not None and have == expected:
+        print(f"    have {dest.name} ({have/1e6:.1f} MB, verified)")
+        return dest
+    if expected is not None and have > expected:
+        print(f"    {dest.name} is larger than expected - refetching")
+        dest.unlink()
+        have = 0
+    if expected is None and expect_kb and have >= expect_kb * 1024:
+        # No Content-Length available; ODE's estimate is a floor, not a target.
+        print(f"    have {dest.name} ({have/1e6:.1f} MB, size UNVERIFIED)")
         return dest
 
     headers = {"Range": f"bytes={have}-"} if have else {}
@@ -140,6 +167,12 @@ def download(url: str, dest: Path, expect_kb: int | None = None) -> Path:
                     print(f"\r    {dest.name} {pct:5.1f}%  {done/1e6:7.1f} MB",
                           end="", flush=True)
         print()
+
+    final = dest.stat().st_size
+    if expected is not None and final != expected:
+        raise IOError(
+            f"{dest.name}: got {final} bytes, server said {expected}. Truncated."
+        )
     return dest
 
 
