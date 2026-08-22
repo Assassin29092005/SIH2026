@@ -246,9 +246,12 @@ def nac_pair():
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--nac", action="store_true", help="run the oblique NAC pair")
+    parser.add_argument("--ladder", action="store_true", help="obliquity ladder 1.2-58.9 deg")
     parser.add_argument("--self-check", action="store_true")
     args = parser.parse_args()
 
+    if args.ladder:
+        return obliquity_ladder()
     if args.nac:
         return nac_pair()
 
@@ -282,6 +285,56 @@ def main() -> int:
             f"homography selected in {n_homog}/{len(picked)} nadir pairs; "
             "held-out selection is not discriminating")
         print("\nself-check: selector does not over-pick homography on nadir pairs.")
+    return 0
+
+
+
+
+# ---------------------------------------------------------------------------
+# The obliquity ladder: at what emission-angle difference does matching break?
+#
+# A bare "fails at 58 degrees" is not an answer; the useful result is where the
+# boundary sits. These are all real LROC NAC images of one site from different
+# orbits, selected through ODE's emission-angle index -- no synthesised warps.
+LADDER = [
+    ("M106726943RC.IMG", 1.2),    # near-nadir anchor
+    ("M106719774LC.IMG", 13.5),
+    ("M1114007294RC.IMG", 16.1),
+    ("M1118716779RC.IMG", 25.5),
+    ("M1443174042RC.IMG", 34.5),
+    ("M1274103575RC.IMG", 58.9),
+]
+
+
+def obliquity_ladder(k=16):
+    """Match the nadir anchor against each rung, reporting the detection peak."""
+    import rasterio
+
+    anchor_name, anchor_em = LADDER[0]
+    path = NAC_DIR / anchor_name
+    if not path.exists():
+        print(f"missing {path}")
+        return 1
+    with rasterio.open(path) as s:
+        anchor = s.read(1).astype(np.float32)
+
+    print(f"anchor: {anchor_name} at {anchor_em} deg emission")
+    print("matching against each rung; peak/median > 3 means a real overlap\n")
+    print(f"{'emission':>9} {'gap':>7} {'best n':>7} {'median':>7} {'peak/med':>9}  verdict")
+    print("-" * 62)
+
+    for name, em in LADDER[1:]:
+        p = NAC_DIR / name
+        if not p.exists():
+            print(f"{em:>8.1f}  missing {name}")
+            continue
+        with rasterio.open(p) as s:
+            other = s.read(1).astype(np.float32)
+        (n, ra, rb), counts = locate_overlap(anchor, other, k=k)
+        med = max(float(np.median(counts)), 1.0)
+        peak = counts.max() / med
+        verdict = "DETECTED" if peak >= 3.0 else "no overlap found"
+        print(f"{em:>8.1f}  {em - anchor_em:>6.1f} {n:>7} {med:>7.0f} {peak:>9.2f}  {verdict}")
     return 0
 
 

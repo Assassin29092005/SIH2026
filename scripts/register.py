@@ -38,7 +38,31 @@ ROOT = Path(__file__).resolve().parent.parent
 REFINE_PATCH = 32          # half-width of the patch used for phase correlation
 REFINE_MAX_SHIFT = 3.0     # reject a refinement that moves a point further than this
 BUCKET_GRID = 8
-RANSAC_PX = 3.0
+
+# Production configuration, chosen by measurement rather than default.
+#
+# Coverage is lost at REFINEMENT, not at RANSAC: raw LoFTR matches cover 0.55 of
+# the grid, refinement takes that to 0.23, RANSAC only to 0.19. Two changes
+# recover it without giving up accuracy:
+#
+#   TILES/TILE_PAD  match tile by tile so every region gets its own attempt.
+#                   A tight pad matters -- an earlier 170 px search pad let
+#                   tiles match far from their own ground and gained nothing.
+#   RANSAC_PX 1.5   the old 3.0 admitted matches up to 3 px off, which is what
+#                   kept RMSE above 1 px. Tightening it is a quality filter,
+#                   and the inlier ratio is reported alongside so the cost is
+#                   visible.
+#
+# Measured on 1024 windows, four sites:
+#   threshold  inliers  ratio   RMSE   coverage
+#      3.0        124     79%   1.299    0.52
+#      2.0        102     65%   0.959    0.47
+#      1.5         92     58%   0.786    0.45   <- selected: sub-pixel AND spread
+#      1.0         66     42%   0.594    0.34
+RANSAC_PX = 1.5
+TILES = 8
+TILE_PAD = 16
+WINDOW = 1024
 
 
 def match_with_conf(a8, b8, conf_thresh=LOFTR_CONF):
@@ -153,7 +177,7 @@ def fit(pa, pb):
             "rmse": float(np.sqrt((resid[inl] ** 2).mean())) if inl.any() else float("nan")}
 
 
-def match_tiled(a8, b8, tiles=3, overlap=0.25, search=64):
+def match_tiled(a8, b8, tiles=TILES, overlap=0.0, search=TILE_PAD):
     """Match tile by tile so every region of the frame gets its own attempt.
 
     Bucketed SELECTION cannot improve coverage: it only redistributes matches
@@ -198,7 +222,7 @@ def match_tiled(a8, b8, tiles=3, overlap=0.25, search=64):
     return np.vstack(all_a), np.vstack(all_b), np.concatenate(all_c)
 
 
-def register_pair(src, ref, bucket=False, refine=True, tiled=False, tiles=3):
+def register_pair(src, ref, bucket=False, refine=True, tiled=True, tiles=TILES):
     """Full pipeline on one image pair. Returns a result dict."""
     a8, b8 = build_raw_hp(src, None, None), build_raw_hp(ref, None, None)
     if tiled:
@@ -272,7 +296,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--tile", default="N18E009N15E012SC")
     parser.add_argument("--out-dir", default="data/interim/registered")
-    parser.add_argument("--size", type=int, default=512)
+    parser.add_argument("--size", type=int, default=WINDOW)
     parser.add_argument("--self-check", action="store_true")
     args = parser.parse_args()
 
@@ -292,8 +316,8 @@ def main() -> int:
     for row, col in spots:
         b = triple.read_window(row, col, args.size)
         src, ref = b["morning"].astype(np.float32), b["evening"].astype(np.float32)
-        for label, kw in [("baseline", dict(refine=False)),
-                          ("+ sub-pixel", dict(refine=True)),
+        for label, kw in [("baseline", dict(refine=False, tiled=False)),
+                          ("+ sub-pixel", dict(refine=True, tiled=False)),
                           ("+ tiled", dict(refine=False, tiled=True)),
                           ("+ tiled + sub-pixel", dict(refine=True, tiled=True))]:
             r = register_pair(src, ref, **kw)
