@@ -63,7 +63,7 @@ Against Kaguya **evening**, four independent chunks:
 
 Agreement to ~1.7 px across independent chunks, at 66.7% inlier ratio and RMSE 0.593 px (4.39 m). The grids were verified aligned to 0.0 px, so the ~3.4 km offset is not a windowing artifact — it is consistent with the uncorrected geolocation error of an uncontrolled Chandrayaan-2 product, which is precisely why registration is needed.
 
-Against Kaguya **morning** the same chunks disagree wildly (rotations −14° to +19°). OHRC's illumination evidently resembles evening. **This asymmetry is unexplained and the offset needs independent verification before being claimed as a measurement.**
+Against Kaguya **morning** the same chunks disagree wildly (rotations −14° to +19°). Measured explanation: OHRC correlates **+0.066 with evening and −0.031 with morning**, consistent with its illumination resembling evening. Both are weak, and a DEM render explains OHRC barely at all (r = +0.006, against +0.067 for Kaguya over the same terrain) — at 0.26 m, OHRC resolves texture a 10 m DTM cannot model. **The 3.4 km offset still needs independent verification before being claimed as a measurement.**
 
 ## Stage B: a hypothesis that failed its own test
 
@@ -82,6 +82,33 @@ Dividing by a render injects a `1/render` term identical in both images. That te
 **The physics is sound and stands independently:** a DEM render reproduces real lunar imagery at r ≈ 0.53–0.58, and correctly recovers each image's illumination direction (morning → 90° east, evening → 225° south-west, from a blind azimuth sweep). Neither result involves a matcher. Rendering works; using it by division for matching does not.
 
 **What replaced it is simpler and uses no DEM at all:** local contrast normalisation — subtract a local mean, divide by a local standard deviation. Halves offset scatter versus raw, raises inlier ratio from 36% to 54%, doubles coverage.
+
+### Stage D: sub-pixel and the deliverable
+
+Phase-correlation refinement on small patches around each match, which returns a genuine float shift rather than the matcher's grid-rounded one.
+
+| Variant | RMSE | Sub-pixel? | Coverage |
+|---|---|---|---|
+| baseline | 1.212 px | no | 0.27 |
+| **+ sub-pixel refinement** | **0.966 px** | **YES** | 0.19 |
+| + tiled matching | 1.296 px | no | 0.27 |
+| + tiled + sub-pixel | 1.067 px | no | 0.14 |
+
+**Sub-pixel accuracy is achieved.** The written deliverable reaches **RMSE 0.731 px (5.41 m)** at 76% inlier ratio.
+
+There is a real trade-off between accuracy and coverage, and it does not go away by tuning:
+
+| LoFTR confidence | Max refine shift | Matches | RMSE | Sub-pixel? | Coverage |
+|---|---|---|---|---|---|
+| 0.5 | 3.0 px | 36 | **0.966** | **YES** | 0.19 |
+| 0.3 | 3.0 px | 64 | 1.091 | no | 0.24 |
+| 0.2 | 5.0 px | 116 | 1.235 | no | 0.29 |
+
+Defaults sit at the sub-pixel end, since the problem statement demands it explicitly.
+
+**Bucketed selection does not improve coverage** and was dropped: selecting among existing matches only redistributes them among cells that already contain some, and empty cells stay empty. Tiled matching, which forces an attempt in every region, also failed to beat the baseline. Coverage remains the weakest result at ~0.19-0.29.
+
+`scripts/register.py` writes the deliverable: the warped registered image, a match-point CSV (source x/y, reference x/y, confidence, residual, inlier flag), and a metrics JSON.
 
 ## The control gate
 
@@ -149,11 +176,13 @@ python scripts/ohrc_vs_kaguya.py --rows 512
 
 **Works, controlled:** cross-illumination matching (0.85 px spread, 54% inliers, corroborated two ways); scale handling to 8×; OHRC geolocation fit to 0.152 m; reading every product in place.
 
-**Works, unverified:** OHRC↔Kaguya evening registration is self-consistent across four chunks but implies a 3.4 km offset that needs independent confirmation, and the morning/evening asymmetry is unexplained.
+**Works, unverified:** OHRC↔Kaguya evening registration is self-consistent across four chunks but implies a 3.4 km offset that needs independent confirmation.
+
+The morning/evening asymmetry is now partly explained: OHRC correlates +0.066 with Kaguya evening and −0.031 with morning, consistent with its illumination resembling evening. Both are weak. The more important finding is that a DEM render explains OHRC barely at all (r = +0.006, against +0.067 for Kaguya on the same terrain) — **at 0.26 m, OHRC resolves texture that a 10 m DTM cannot model**, so DEM-based illumination reasoning cannot bridge a 28× resolution gap.
 
 **Does not work:** Stage B for matching. 16× scale. SIFT at any ratio (53 px scatter).
 
-**Known limits:** LoFTR capped near 1024×1024 on CPU. Uniformity peaks at 0.43, below the problem statement's implicit target. Sub-pixel RMSE is not yet demonstrated under controls — current RMSE is ~1.2 px.
+**Known limits:** LoFTR capped near 1024×1024 on CPU. **Uniformity is the weakest result at ~0.19-0.29** and resists both bucketed selection and tiled matching. Viewpoint variation — the third challenge the problem statement names — is untested; only an affine model is fitted, so genuine perspective distortion is unhandled.
 
 ## Project conventions
 

@@ -35,6 +35,18 @@ Rules for writing entries:
 
 ## Log
 
+### BUG-012 — Sub-pixel refinement subtracted the correlation shift instead of adding it
+
+- **Date:** 2026-08-23
+- **Status:** FIXED
+- **Area:** stage-d-fit
+- **Symptom:** Adding phase-correlation refinement on top of LoFTR made accuracy **worse**, RMSE 1.212 -> 1.574 px, and discarded 60% of matches (68 -> 25) to the `REFINE_MAX_SHIFT` guard.
+- **Root cause:** Sign convention. `cv2.phaseCorrelate(A, B)` was assumed to return the correction to apply to B. Measured empirically instead: taking patch B `s` pixels to the right of patch A makes it return `-s`. So the correction ADDS the returned shift. Subtracting it moved every point the wrong way, doubling the error rather than removing it -- which also pushed most refinements past the 3 px reject threshold, explaining the match loss.
+- **Fix:** `out_b.append((xb + dx, yb + dy))` in `scripts/register.py`. RMSE went 1.574 -> 0.966 px, crossing into sub-pixel, and the retained-match count roughly recovered.
+- **Check:** `python scripts/register.py --self-check` asserts the best variant achieves RMSE < 1.0 px.
+- **Second bug found in the same pass:** `conf = conf[:len(pa)]` after refinement. Refinement drops *arbitrary* indices, so slicing by length silently paired each surviving match with the wrong confidence. Fixed by returning the kept-index array and selecting with it. This one would never have surfaced as a crash -- only as slightly wrong bucketing priorities.
+- **Lesson, and it is the same one as BUG-003:** a library's sign convention is cheaper to measure than to reason about. Three lines of test with a known shift settled what the documentation left ambiguous.
+
 ### BUG-011 — Shared zero-mask faked the headline result; identity ground truth was also wrong
 
 **This invalidates the previously reported 100% inlier rates. Read this before trusting any earlier number.**
