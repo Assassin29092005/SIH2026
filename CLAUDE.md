@@ -62,6 +62,13 @@ Use the **PDS ODE REST API** (`https://oderest.rsl.wustl.edu/live2/`) for everyt
   - So a complete (morning, evening, DEM) triple resolves by string substitution. ~288 MB per file, direct HTTP from JAXA DARTS, no login. Note the URL path uses lowercase `m04`/`e04` while the filename is uppercase.
   - This is the Stage-B training set: co-registered same-terrain imagery under opposite illumination, plus the DEM the photometric renderer needs.
 
+**Verified from real labels (tile `N18E009N15E012SC`): correspondence within a triple is the identity.** All three products are SIMPLE CYLINDRICAL, `MAP_RESOLUTION` 4096 px/deg (`MAP_SCALE` 7.403 m/px), identical `LINE_PROJECTION_OFFSET` / `SAMPLE_PROJECTION_OFFSET`, identical bounds, 12288 x 12288, 16-bit. So pixel (i,j) in morning **is** pixel (i,j) in evening **is** pixel (i,j) in the DEM.
+
+Consequences — do not lose these:
+- Stage-B training crops need no registration step. Crop the same window index from all three and the pair is exactly aligned. Ground truth is geometric, not estimated.
+- **`SAMPLE_TYPE` differs by product: images are `MSB_UNSIGNED_INTEGER`, the DEM is `MSB_INTEGER` (signed).** Reading the DEM as unsigned turns every negative elevation into a huge positive. Both are big-endian.
+- Verify with `python scripts/kaguya.py labels --site <name>`, which fails loudly if the grid ever disagrees.
+
 **Site selection matters more than expected.** At the Chandrayaan-3 landing site (69°S) NAC coverage is 390 products but collapses into just 2 illumination bins — 333 of them at 70-90° incidence, because it is polar. A mid-latitude box populates all 4 bins evenly (216/189/145/153). **Train on mid-latitude tiles; reserve polar sites for evaluation**, where they match OHRC's actual targeting.
 
 Run `python scripts/survey_coverage.py --site <name>` before committing to any region.
