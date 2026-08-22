@@ -1,4 +1,13 @@
-"""Scale handling: match across a resolution ratio by working at a common GSD.
+"""SUPERSEDED -- results from this module are INVALID.
+
+Stage-B normalisation that fails the noise control produces an identical pattern in both images that the
+matcher locks onto instead of the terrain. Numbers this module reported were
+retracted; see BUGS.md BUG-011.
+
+Kept because `scripts/remeasure.py` imports its helper functions and because the
+retracted results must remain reproducible. Do not cite its output.
+
+Scale handling: match across a resolution ratio by working at a common GSD.
 
 The earlier `scale_test.py` normalised the fine image at fine resolution and the
 coarse image at coarse resolution, then tried to match the two. That fails, and

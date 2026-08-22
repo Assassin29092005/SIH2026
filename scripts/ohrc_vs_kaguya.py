@@ -27,9 +27,9 @@ import numpy as np
 import rasterio
 from rasterio.windows import from_bounds
 
-from ablation import POOL_ELEVATIONS, dedupe, match_uniformity, to_uint8
+from ablation import match_uniformity
 from dense_match import match_loftr
-from scale_pipeline import normalise_at
+from remeasure import build_raw_hp, offset_of
 from triple_io import find_tiles, open_triple
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -62,25 +62,49 @@ def kaguya_window(triple, bounds):
     return out
 
 
-def match_pair(source, reference, dem, gsd_m, lat, elevations=POOL_ELEVATIONS):
-    """Stage-B normalise both sides at a shared GSD, then match."""
-    all_a, all_b = [], []
-    for el in elevations:
-        na, va = normalise_at(source, dem, gsd_m, lat, el)
-        nb, vb = normalise_at(reference, dem, gsd_m, lat, el)
-        valid = va & vb & (source > 0) & (reference > 0)
-        if valid.mean() < 0.02:
-            continue
-        a8, b8 = to_uint8(na, valid), to_uint8(nb, valid)
-        a8[~valid] = 0
-        b8[~valid] = 0
-        pa, pb = match_loftr(a8, b8)
-        if len(pa):
-            all_a.append(pa)
-            all_b.append(pb)
-    if not all_a:
-        return np.zeros((0, 2)), np.zeros((0, 2))
-    return dedupe(np.vstack(all_a), np.vstack(all_b))
+def match_pair(source, reference, dem=None, gsd_m=None, lat=None):
+    """Match with the validated DEM-free normalisation.
+
+    Stage-B division is deliberately NOT used: it failed the control gate,
+    passing noise through more readily than terrain (BUGS.md BUG-011). Local
+    contrast normalisation uses no DEM, so it cannot inject shared structure,
+    and it is also the better performer.
+    """
+    return match_loftr(build_raw_hp(source, None, None),
+                       build_raw_hp(reference, None, None))
+
+
+def controls(source, reference, rng, roll_px=15):
+    """The four-control gate, on the real OHRC/Kaguya pair."""
+    base = offset_of(*match_pair(source, reference))
+    lines, ok = [], True
+    if base is None:
+        return False, ["real pair: too few matches"]
+    n_real = len(match_pair(source, reference)[0])
+    lines.append(f"real pair       dx={base[0]:+7.2f} dy={base[1]:+7.2f}  n={n_real}")
+
+    rolled = offset_of(*match_pair(np.roll(source, roll_px, axis=1), reference))
+    if rolled is None:
+        lines.append("roll control    collapsed  FAIL")
+        ok = False
+    else:
+        delta = rolled[0] - base[0]
+        good = abs(delta + roll_px) < 4.0
+        ok &= good
+        lines.append(f"roll +{roll_px} raw     dx moved {delta:+7.2f} (want {-roll_px:+d})"
+                     f"  {'PASS' if good else 'FAIL'}")
+
+    for tag, img in [("noise", rng.normal(source[source > 0].mean(),
+                                          source[source > 0].std(), source.shape)),
+                     ("constant", np.full(source.shape,
+                                          float(source[source > 0].mean())))]:
+        n_fake = len(match_pair(img.astype(np.float32), reference)[0])
+        ratio = n_real / max(n_fake, 1)
+        good = n_fake < 8 or ratio >= 5.0
+        ok &= good
+        lines.append(f"{tag:<15} n={n_fake:>5} ratio {ratio:>6.1f}x  "
+                     f"{'PASS' if good else 'FAIL'}")
+    return ok, lines
 
 
 def report(pa, pb, shape, gsd_m, label) -> dict:
@@ -171,6 +195,20 @@ def main() -> int:
 
     # The strip is long and thin; process it in chunks so LoFTR sees roughly
     # square inputs, which is what it was trained on.
+    rng = np.random.default_rng(0)
+    # Gate before reporting anything.
+    r0 = slice(1024, 2048)
+    ok, lines = controls(ohrc[r0, :w].astype(np.float32),
+                         bands["morning"][r0, :w].astype(np.float32), rng)
+    print("")
+    print("control gate:")
+    for ln in lines:
+        print(f"  {ln}")
+    if not ok:
+        print("  -> CONTROLS FAILED. No results reported.")
+        return 1
+    print("  -> controls passed")
+
     results = []
     for row0 in range(0, h - args.rows + 1, args.rows):
         sl = slice(row0, row0 + args.rows)
@@ -181,7 +219,7 @@ def main() -> int:
         dem = np.nan_to_num(dem, nan=float(np.nanmean(dem)))
         for ref_name in ("morning", "evening"):
             ref_chunk = bands[ref_name][sl, :w].astype(np.float32)
-            pa, pb = match_pair(src_chunk, ref_chunk, dem, args.gsd, lat)
+            pa, pb = match_pair(src_chunk, ref_chunk)
             r = report(pa, pb, (args.rows, w),
                        args.gsd, f"rows {row0}-{row0+args.rows} vs Kaguya {ref_name}")
             if r:

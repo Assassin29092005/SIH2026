@@ -235,11 +235,70 @@ def evaluate(build, matcher, triple, spots, el, label, rng, verbose):
     return {"offs": a, "spread": spread, "fits": fits, "label": label}
 
 
+def scale_mode(triple, spots, ksize=31, size=None):
+    """Re-measure scale handling with the validated (DEM-free) normalisation.
+
+    The earlier scale results used the shared-mask pipeline and are void. Here
+    both sides are brought to a common GSD, normalised by local contrast only,
+    and gated by the same controls. Ground truth is not assumed: the recovered
+    offset must simply agree across independent windows.
+    """
+    from scale_test import decimate
+
+    print("")
+    print("SCALE (LoFTR + local contrast norm, common GSD)")
+    print(f"{'ratio':>6} {'coarse m/px':>12} {'n':>7} {'inlier':>7} {'RMSE':>8} "
+          f"{'cov':>6} {'spread':>8} {'noise':>7}")
+    base = abs(triple.transform.a)
+    rng = np.random.default_rng(0)
+    rows = []
+
+    for k in (1, 2, 4, 8, 16):
+        offs, fits, noise_n, real_n = [], [], 0, 0
+        for row, col in spots:
+            bands = triple.read_window(row, col, size or SIZE)
+            src = decimate(bands["morning"].astype(np.float32), k)
+            ref = decimate(bands["evening"].astype(np.float32), k)
+            h = min(src.shape[0], ref.shape[0]); w = min(src.shape[1], ref.shape[1])
+            src, ref = src[:h, :w], ref[:h, :w]
+            if min(h, w) < 64:
+                continue
+            a8 = build_raw_hp(src, None, None, ksize)
+            b8 = build_raw_hp(ref, None, None, ksize)
+            pa, pb = match_loftr(a8, b8)
+            off, fit = offset_of(pa, pb), fit_quality(pa, pb, (h, w))
+            real_n += len(pa)
+            noise = rng.normal(src.mean(), src.std(), src.shape)
+            noise_n += len(match_loftr(build_raw_hp(noise, None, None, ksize), b8)[0])
+            if off and fit:
+                offs.append(off[:2]); fits.append(fit)
+
+        if len(offs) < 2:
+            print(f"{k:>5}x {base*k:>12.2f}   too few usable windows")
+            continue
+        a = np.array(offs)
+        spread = float(np.hypot(a[:, 0].std(), a[:, 1].std()))
+        ratio = real_n / max(noise_n, 1)
+        gate = "" if ratio >= NOISE_REJECT_RATIO else "  <- FAILS noise gate"
+        print(f"{k:>5}x {base*k:>12.2f} {int(np.mean([f['n'] for f in fits])):>7} "
+              f"{np.mean([f['ratio'] for f in fits])*100:>6.0f}% "
+              f"{np.mean([f['rmse'] for f in fits]):>8.3f} "
+              f"{np.mean([f['cov'] for f in fits]):>6.2f} {spread:>8.2f} "
+              f"{ratio:>6.1f}x{gate}")
+        rows.append((k, spread, ratio))
+    print("")
+    print("spread is in COARSE pixels. noise = real matches / noise matches; "
+          f"must be >= {NOISE_REJECT_RATIO:g}x.")
+    return rows
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--tile", default="N18E009N15E012SC")
     parser.add_argument("--windows", type=int, default=4)
     parser.add_argument("--full", action="store_true", help="also run SIFT variants")
+    parser.add_argument("--scale", action="store_true", help="re-measure scale handling")
+    parser.add_argument("--size", type=int, default=None, help="window size for --scale")
     args = parser.parse_args()
 
     if args.tile not in find_tiles():
@@ -251,6 +310,10 @@ def main() -> int:
 
     print(f"tile {triple.tile}, {len(spots)} windows of {SIZE}x{SIZE}")
     print("No identity ground truth is used. Validation is cross-window agreement.")
+
+    if args.scale:
+        scale_mode(triple, spots, size=args.size)
+        return 0
 
     results = []
     combos = [("LoFTR raw", build_raw, match_loftr, None),

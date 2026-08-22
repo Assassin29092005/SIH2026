@@ -1,4 +1,13 @@
-"""Stage C: does a dense matcher beat SIFT, and does it still need Stage B?
+"""SUPERSEDED -- results from this module are INVALID.
+
+the shared zero-mask in stage_b_pair() produces an identical pattern in both images that the
+matcher locks onto instead of the terrain. Numbers this module reported were
+retracted; see BUGS.md BUG-011.
+
+Kept because `scripts/remeasure.py` imports its helper functions and because the
+retracted results must remain reproducible. Do not cite its output.
+
+Stage C: does a dense matcher beat SIFT, and does it still need Stage B?
 
 Compares four combinations on identical windows, scored against the identity
 ground truth:

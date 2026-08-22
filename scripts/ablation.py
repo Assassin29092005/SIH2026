@@ -1,4 +1,13 @@
-"""The headline experiment: does Stage B make a cross-illumination pair matchable?
+"""SUPERSEDED -- results from this module are INVALID.
+
+the shared zero-mask in stage_b_matches()/normalise() produces an identical pattern in both images that the
+matcher locks onto instead of the terrain. Numbers this module reported were
+retracted; see BUGS.md BUG-011.
+
+Kept because `scripts/remeasure.py` imports its helper functions and because the
+retracted results must remain reproducible. Do not cite its output.
+
+The headline experiment: does Stage B make a cross-illumination pair matchable?
 
 Morning and evening images of identical terrain anti-correlate (-0.560 measured),
 and classical descriptors fail on them. Stage B divides each image by a DEM

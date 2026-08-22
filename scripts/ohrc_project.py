@@ -94,6 +94,22 @@ def project(ohrc, coeffs, grid, degree: int = DEFAULT_DEGREE,
         # reads inside a zip are far slower than one sequential pass.
         strip = src.read(1)
 
+    # Anti-alias BEFORE point sampling. Output GSD is ~28x the 0.26 m source,
+    # so nearest-neighbour sampling would take one arbitrary pixel per 28x28
+    # block and alias the signal into noise -- which is exactly what made the
+    # first OHRC-vs-Kaguya run fail its control gate. A box filter of the
+    # decimation factor is the cheap correct answer.
+    import cv2
+
+    src_gsd_m = 0.26
+    factor = int(round(np.degrees(grid["deg_per_px"]) * 0 + grid["deg_per_px"]
+                       * np.pi / 180 * MOON_RADIUS_M / src_gsd_m))
+    if factor >= 2:
+        k = factor | 1  # odd kernel keeps the sample centred
+        strip = cv2.blur(strip, (k, k))
+        print(f"    anti-alias: {k}x{k} box filter before sampling "
+              f"(decimation factor ~{factor})")
+
     for row0 in range(0, grid["height"], chunk):
         rows = np.arange(row0, min(row0 + chunk, grid["height"]))
         lon = grid["west"] + (cols[None, :] + 0.5) * grid["deg_per_px"]

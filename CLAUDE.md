@@ -27,12 +27,14 @@ These are non-negotiable. They override convenience.
 
 ## Approach
 
-Four stages. The differentiator is Stage B — do not let it get dropped for expedience.
+**Revised 2026-08-23 after controlled re-measurement. Stage B, previously described here as the differentiator, is NOT supported by evidence — see BUGS.md BUG-011.**
+
+Four stages. What survives measurement is A, C and D; B is retained only as a physics result.
 
 - **A. Coarse localization.** PDS4 labels carry sub-solar lat/lon, incidence/emission/phase angles, and SPICE-derived pointing. Use them as a positional prior so we never search globally.
-- **B. Photometric normalization.** Render the LOLA/GLD100 DEM patch under the *source image's* sun geometry (Lommel–Seeliger or Hapke). This converts cross-illumination matching into same-illumination matching.
-  - Why it matters: the Moon has no atmosphere, so no diffuse fill light. A crater lit from the east is near pixel-identical to a dome lit from the west. Classical descriptors do not merely degrade on this — they return confident wrong matches. Stage B sidesteps invariance instead of fighting it.
-  - The on/off ablation of this stage, plotted against Δsun-azimuth, is our central scientific claim. Keep it runnable at all times.
+- **B. Photometric normalization — FAILED ITS CONTROLS. Do not use for matching.** Rendering the DEM under the source image's sun geometry reproduces real imagery well (r = 0.53-0.58) and recovers illumination direction correctly. That physics is sound. But using it to normalise by division injects a `1/render` term identical in both images, and that term alone is enough for the matcher: **pure noise pushed through Stage B produces more matches than real terrain** (266 vs 20 at 20 deg elevation; 3591 vs 9 with high-pass). It fails the noise gate at 0.1x against a 5x threshold.
+  - **What replaced it:** local contrast normalization — subtract a local mean, divide by a local standard deviation, no DEM involved. Halves offset scatter versus raw (3.02 to 0.85 px), raises inlier ratio 36% to 54%, doubles coverage, and passes every control.
+  - Keep the renderer: it is a valid illumination-recovery tool and the physics result stands on its own.
 - **C. Dense matching + sub-pixel refinement.** Lunar terrain is texture-poor, so detector-based methods starve. Use a dense/semi-dense matcher (LoFTR / RoMa class), fine-tuned. Sub-pixel comes from soft-argmax over the correlation volume plus a local quadratic fit on the peak. Without this head we cannot claim sub-pixel, and the PS demands it.
 - **D. Robust fit.** MAGSAC++ per tile over affine/homography, then a global TPS or polynomial warp for the registered product.
 
@@ -141,7 +143,8 @@ Baselines to beat: SIFT, ASIFT, phase correlation, off-the-shelf SuperPoint+Ligh
 - Absolute paths in scripts; this repo lives at `D:\SIH`.
 - Every non-trivial module leaves one runnable check — an `assert`-based `demo()` / `__main__` self-check, or a small `test_*.py`. No frameworks, no fixtures.
 - Mark deliberate simplifications with a `# ponytail:` comment naming the ceiling and the upgrade path.
-- Keep the Stage B ablation runnable at every commit.
+- **Every matching number must pass the four-control gate in `scripts/remeasure.py` before it is written down**: real pair matches; the RAW input rolled by N moves the recovered offset by -N; noise and constant-grey collapse or lose by 5x. Perturb the INPUT, never the normalised output — that is what hid BUG-011.
+- Validation is cross-window agreement on the recovered offset, not agreement with an assumed ground truth. Kaguya morning and evening are genuinely offset by 8.25 px; identity correspondence is false.
 - Never report a metric without saying which data split produced it.
 
 ## Bug log rule
