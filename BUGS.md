@@ -35,6 +35,17 @@ Rules for writing entries:
 
 ## Log
 
+### BUG-008 — Independent validity masks gave the two images different intensity stretches
+
+- **Date:** 2026-08-23
+- **Status:** FIXED
+- **Area:** stage-c-matching
+- **Symptom:** `scripts/scale_test.py` reported near-zero correct matches at **every** ratio including **1x**, where it should have reproduced the known-good ablation result. Direct comparison on identical input: `ablation.stage_b_matches` 47/67 correct, `scale_test.stage_b_scaled` 0/17.
+- **Root cause:** `ablation` intersects the two shadow-validity masks and stretches both images over the *same* pixel population. `scale_test` used each image's own mask, because at k>1 the two arrays have different shapes and could not be intersected directly. `to_uint8` sets its 1st/99th percentile from the valid pixels, so two masks covering different terrain produce two different intensity mappings — after which the descriptors are computed on incomparable scales and cannot match.
+- **Fix:** Added `intersect_masks()` in `scripts/scale_test.py`, which brings the masks onto a common footprint across resolutions — replicating the coarse mask up to the fine grid, and requiring a coarse pixel to be majority-valid when going down — before either image is stretched.
+- **Check:** `python scripts/scale_test.py` at ratio 1x must roughly match `ablation.py` on the same windows. It now returns 975/1074 correct (91%) at coverage 0.90.
+- **Why this one mattered:** the failure looked exactly like a scientific result. "Scale invariance fails" is a plausible, expected-sounding conclusion, and the 1x row was the only thing that exposed it as a harness bug. **Always include a control condition whose answer you already know.**
+
 ### BUG-007 — `STANDARD_GEOMETRY` read as acquisition geometry, flattening every render
 
 - **Date:** 2026-08-23
