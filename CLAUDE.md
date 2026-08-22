@@ -87,6 +87,20 @@ PRADAN needs a login but the **shapefiles are separate small downloads** (`OHRC_
 
 Note TMC-2 gives one illumination per site, not a morning/evening pair. So the production task is **TMC-2 ortho (or OHRC) matched against LROC NAC** — cross-sensor, cross-illumination and cross-scale at once, which is precisely what the PS asks for. Kaguya remains the controlled training set because it alone provides identity-correspondence pairs.
 
+### Chandrayaan-2 products in hand, 2026-08-23
+
+Three archives under `data/raw/ch2/`, all verified with `testzip()`. **Read them in place via GDAL `/vsizip/` — do not extract**, that would put ~10 GB of imagery on disk for no gain. Windowed reads work; OHRC takes ~2 s per window. `scripts/ch2_io.py` wraps both product types.
+
+PRADAN's `FileSizeInBytes` column is the **uncompressed** product size, not the archive size. The OHRC zip is 555 MB containing a 938 MB `.img` — a partial download would look plausible against the catalogue number, so verify with `zipfile.testzip()`, never by size.
+
+**OHRC** `ch2_ohr_ncp_20210402T0546284043_d_img_d18` — 12000 x 78175, 8-bit, 0.26 m/px, a 3.1 x 20.3 km strip at ~0.6N 23.4E. **Not map projected**: `crs` is None, no geotransform. Geolocation comes from the sidecar `geometry/**.csv`, which samples Longitude/Latitude against Pixel/Scan every 100 px (94,743 samples). That locates the strip; it does not georeference a pixel.
+
+**TMC-2** `ch2_tmc_ndn_20201126T1610528086` ortho + DTM — GeoTIFF on a SelenoGraphic sphere (radius 1737400). Ortho 10380 x 341544 at ~5.05 m/px; DTM 5190 x 170772 at ~10.1 m/px over **identical bounds**, so ortho pixel (i,j) is DTM pixel (i/2, j/2). Verified: corr(ortho, DEM) = +0.364 on a 512 window at the equator, 224 m relief, 100% valid.
+
+**Neither product carries sun angles.** OHRC's PDS4 label has `pixel_resolution` and `start_date_time` but no incidence/azimuth; TMC-2's shapefile records list `INC_ANGLE`, `EMI_ANGLE`, `PHA_ANGLE` as 0.0. So illumination must be recovered by correlation sweep exactly as for Kaguya.
+
+**Caution on TMC-2 footprint selection.** These derived products are long strips — this one spans 28.4N to 28.5S, ~1730 km. Ranking candidates by centre latitude, as `ch2_footprints.py --pick tmc` currently does, measures strip length rather than suitability, and inflates the NAC counts because the bounding box is enormous. OHRC footprints are small (3 km swath) so centre latitude is meaningful there. **Fix the TMC picker to rank on overlap area and per-area NAC density before downloading more.**
+
 ## Training curriculum
 
 Easy to hard. Hold out the last tier.

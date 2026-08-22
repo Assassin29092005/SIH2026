@@ -34,3 +34,6 @@ data/interim/ode_manual.pdf
 
 # model weights cache
 *.ckpt
+
+# Chandrayaan-2 archives (large, re-downloadable from PRADAN)
+data/raw/ch2/*.zip
