@@ -35,6 +35,17 @@ Rules for writing entries:
 
 ## Log
 
+### BUG-010 — Blind scale estimation is confounded by normalising both sides against the same DEM
+
+- **Date:** 2026-08-23
+- **Status:** FIXED (by removing the need for it)
+- **Area:** stage-c-matching
+- **Symptom:** `scale_pipeline.py --estimate` recovered the correct ratio only for k=2, returning k=3 when the truth was 4 and again k=3 when it was 8. Correct-match counts were flat across every candidate (true k=4 gave 536/763/777/756 for k=1/2/3/4), and LoFTR mean confidence never left 0.90-0.97 regardless of k.
+- **Root cause:** Not a tuning problem — the experiment leaks. `match_common_gsd()` normalises **both** sides against the *same* decimated DEM. Both normalised images therefore inherit identical DEM-derived structure, and the matcher locks onto that shared signal whether or not the imagery aligns. Match count and confidence cannot discriminate k because they are partly measuring the DEM against itself. For the real task sharing the reference DEM is correct; it just destroys this metric's validity.
+- **Fix:** Stopped estimating. Every product in the project declares its own ground sample distance — OHRC `pixel_resolution = 0.26 m` in the PDS4 label, Kaguya `MAP_SCALE = 7.403`, TMC-2 and NAC in their geotransform and ODE metadata. `gsd_metres()` and `scale_ratio()` in `scripts/scale_pipeline.py` read k instead of guessing, converting degrees to metres for geographic products.
+- **Check:** `gsd_metres()` on the TMC-2 ortho and DTM returns 5.052 and 10.104 m, giving k = **2.00** — a ratio independently known to be exactly 2 from the products' identical bounds and 2:1 pixel dimensions.
+- **Why this one mattered:** the estimator returned confident, near-miss answers (3 instead of 4) rather than obvious garbage, which reads like a method that needs tuning rather than one that is measuring the wrong thing. The lesson is about experiment design, not scale: **if both sides of a comparison are derived from a shared input, any agreement metric is partly measuring that input.**
+
 ### BUG-009 — TMC-2 candidate ranking measured strip length, not suitability
 
 - **Date:** 2026-08-23

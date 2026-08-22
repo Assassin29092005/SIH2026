@@ -101,19 +101,30 @@ Verified against controls, because a 100% rate deserves suspicion:
 | Known 7 px shift | recover ±7 | +7.29 |
 | Unrelated terrain | near zero matches | 0 / 5 |
 
-### Scale invariance — the open problem
+### Scale — solved by normalising at a common GSD
 
-Matching a full-resolution source against a decimated reference, three 1024×1024 windows:
+The first attempt normalised the fine image at fine resolution and the coarse one at coarse resolution, then matched. It degraded badly with ratio. The cause was measurable rather than mysterious: a Stage-B product normalised at full resolution and then decimated correlates with one normalised directly at the coarse resolution at only **0.56 (k=2), 0.27 (k=4), −0.09 (k=8)**. A coarse DEM cancels different shading than a fine DEM does, so the two products are not comparable.
 
-| Ratio | Effective m/px | Raw rate | Stage B rate | RMSE (coarse px) |
-|---|---|---|---|---|
-| 1× | 7.40 | 0% | **91%** | 0.63 |
-| 2× | 14.81 | 0% | 31% | 1.62 |
-| 4× | 29.61 | 1% | 14% | 3.61 |
-| 8× | 59.23 | 1% | 6% | 9.31 |
-| 16× | 118.45 | 0% | 2% | 23.00 |
+This is the same rule as the same-elevation finding: **normalisation parameters must match across the pair**, and resolution is one of them. Bringing both sides to a common GSD *before* normalising:
 
-Stage B beats raw at every ratio but degrades sharply. **Illumination is solved; scale is not.** Closing this is the remaining work, and it is where OHRC-to-basemap matching actually lives.
+| Ratio | Coarse m/px | Before | After (LoFTR) | RMSE (coarse px) | Uniformity |
+|---|---|---|---|---|---|
+| 1× | 7.40 | 91% | **100%** | 0.617 | 1.00 |
+| 2× | 14.81 | 31% | **100%** | 0.640 | 1.00 |
+| 4× | 29.61 | 14% | **100%** | 0.670 | 0.99 |
+| 8× | 59.23 | 6% | **99%** | 0.982 | 0.55 |
+| 16× | 118.45 | 2% | **100%** | 1.173 | 0.16 |
+
+Sub-coarse-pixel RMSE holds through 8×. Accuracy is reported in *coarse* pixels deliberately: when the reference is k times coarser, sub-source-pixel accuracy is not recoverable from it, because the information is not present. Match count falls with k simply because the coarse image holds k² fewer pixels.
+
+**The ratio is read, not guessed.** Blind estimation from match count or matcher confidence is confounded — both sides are normalised against the same DEM, so any agreement metric is partly measuring that DEM against itself (see BUGS.md BUG-010). It is also unnecessary, since every product declares its ground sample distance:
+
+| Pair | k from metadata |
+|---|---|
+| OHRC → LROC NAC | 3.85 |
+| OHRC → TMC-2 ortho | 19.43 |
+| TMC-2 ortho → Kaguya TC | 1.47 |
+| TMC-2 ortho → TMC-2 DTM | **2.00** (independently known to be exactly 2 — validates the method) |
 
 **A methodological caution worth recording three times over:** global correlation between the normalised pair is *negative* (−0.316) in the very window where LoFTR matches at 100%. Earlier, correlation got worse (−0.318 → −0.476) exactly where matching went from 0 to 21 correct. Global linear correlation measures whole-image brightness agreement; matching depends on local structure. Optimising Stage B against correlation would have tuned it precisely backwards.
 
