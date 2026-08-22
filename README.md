@@ -1,19 +1,10 @@
 # Sun-Angle Invariant Lunar Image Correspondence
 
-> ## ⚠️ Results under revision (2026-08-23)
+> ## Results revised 2026-08-23 — earlier claims retracted
 >
-> The previously reported **100% inlier rates are invalid**. Control experiments showed the matcher was locking onto a **shared zero-mask** written identically into both images, not onto the imagery: pure noise and a constant grey image both produced thousands of "correct" matches, and shifting the raw input by 15 px changed the recovered displacement by 0.11 px.
+> Previously reported 100% inlier rates were **invalid** and have been replaced. The matcher was locking onto a shared zero-mask written identically into both images, and the identity ground truth was wrong by a measured 8.25 px. Full diagnosis in [BUGS.md](BUGS.md) BUG-011.
 >
-> A second, independent error compounded it. The identity ground truth was wrong — phase correlation measures a systematic **8.25 px (~62 m)** offset between the Kaguya morning and evening mosaics. Real matches at the true offset were scored *incorrect* and mask artifacts at zero offset were scored *correct*, which is why the baseline read 0% and Stage B read 100%.
->
-> What survives, because none of it depends on the matcher or on identity GT:
-> - the −0.560 raw anti-correlation between morning and evening
-> - the DEM render reproducing real imagery at r ≈ 0.53–0.58, and recovering illumination direction
-> - the measured 8.25 px inter-product offset itself
-> - raw LoFTR passing all four controls (dx −0.33; roll +15 → −16.48; noise and constant collapse)
->
-> Full diagnosis in [BUGS.md](BUGS.md) BUG-011. Re-measurement is the next work item.
-
+> All current numbers come from `scripts/remeasure.py`, which refuses to report any method that fails a four-part control gate. **The project's central hypothesis — that DEM-based photometric normalisation enables cross-illumination matching — is not supported by controlled measurement.** See "Stage B does not survive its own test" below.
 
 **Smart India Hackathon 2026 — Problem Statement SIH26166 (ISRO / Department of Space)**
 
@@ -76,45 +67,38 @@ Nothing forced that outcome — morning could have come back western. It was a f
 | 30° | 90° | +0.539 | 0.165 | 0.0% |
 | 60° | 90° | +0.533 | 0.045 | 0.0% |
 
-### Stage B ablation — the headline
+### Controlled re-measurement (supersedes the retracted results)
 
-SIFT matching morning against evening, scored against the identity ground truth, across five independent 512×512 windows of the same tile:
+Every number below comes from `scripts/remeasure.py`, which refuses to report a method that fails its control gate. No identity ground truth is used, because Kaguya morning and evening are genuinely offset. Validation is **cross-window agreement**: if a method measures real terrain, independent windows must recover the same inter-product offset. An artifact cannot do that.
 
-| Window (row, col) | Raw correct / matches | Stage B correct / matches | Inlier rate | RMSE | Uniformity |
+| Method | Cross-window spread | Inlier ratio | RMSE | Coverage | Controls |
 |---|---|---|---|---|---|
-| (2000, 2000) | 0 / 8 | 28 / 37 | 76% | 0.602 px | 0.23 |
-| (4000, 7000) | 0 / 8 | 76 / 84 | 90% | 0.743 px | 0.45 |
-| (5888, 5888) | 0 / 6 | 21 / 26 | 81% | 0.504 px | 0.20 |
-| (8000, 3000) | 0 / 12 | 40 / 50 | 80% | 0.768 px | 0.31 |
-| (9500, 9500) | 0 / 10 | 6 / 12 | 50% | 0.627 px | 0.06 |
-| **Total** | **0 / 44** | **171 / 209** | **81.8%** | **sub-pixel throughout** | |
+| LoFTR raw | 3.02 px | 36% | 1.175 px | 0.13 | pass |
+| **LoFTR + local contrast norm** | **0.85 px** | **54%** | 1.212 px | **0.27** | **pass** |
+| LoFTR + Stage B (el 20°) | — | — | — | — | **FAIL** |
+| LoFTR + Stage B + high-pass | — | — | — | — | **FAIL** |
+| SIFT raw | 53.50 px | 31% | 0.611 px | 0.03 | pass (but unusable) |
+| SIFT + Stage B | — | — | — | — | **FAIL** |
 
-Raw SIFT does not merely score badly across illumination — it produces **zero correct matches in 44 attempts**. With Stage B the same detector reaches 81.8% inlier rate at sub-pixel RMSE.
+**Independent corroboration.** The best method recovers an inter-product offset of **dy = +7.62 px**. Phase correlation — a completely different algorithm, no matcher involved — independently measures **dy = +8.25 px**. Two unrelated methods agreeing is the evidence that terrain, not artifact, is being measured.
 
-### Stage C — adding a dense matcher
+### Stage B does not survive its own test
 
-Four combinations on identical windows, scored against the identity ground truth. LoFTR uses kornia's public `outdoor` weights, trained on MegaDepth and never on a lunar image.
+The central hypothesis of this project was that rendering the DEM into the source image's illumination would enable cross-illumination matching. **Controlled measurement does not support it.**
 
-| Method | Correct | Matches | Inlier rate | RMSE | Uniformity |
-|---|---|---|---|---|---|
-| SIFT raw | 0 | 26 | 0% | — | 0.00 |
-| SIFT + Stage B | 187 | 244 | 77% | 0.640 px | 0.44 |
-| **LoFTR raw** | **0** | **186** | **0%** | — | 0.00 |
-| **LoFTR + Stage B** | **10504** | **10510** | **100%** | **0.679 px** | **1.00** |
+Worse than neutral, it is actively harmful. Feeding **pure noise** through Stage B produces *more* matches than real terrain does:
 
-Two conclusions, and the second is the important one:
+| Variant | Noise matches | Real matches | Ratio |
+|---|---|---|---|
+| Stage B, el 20° | 266 | 20 | **0.1×** |
+| Stage B + high-pass, el 20° | 1223 | 19 | **0.0×** |
+| Stage B + high-pass, el 10° | 3591 | 9 | **0.0×** |
 
-1. The dense matcher is transformative — 56× more correct matches than SIFT, at complete grid coverage. Sub-pixel RMSE and uniformity 1.00 satisfy both explicit requirements of the problem statement.
-2. **Stage B is load-bearing, not a nicety.** A modern learned dense matcher scores **0 out of 186** on raw cross-illumination lunar imagery. It fails just as completely as SIFT. Stage B is what takes it from 0% to 100%.
+Dividing by a render injects a `1/render` term identical in both images, and that term alone is sufficient for the matcher. Since it does not move when the imagery moves, the matcher stops tracking terrain.
 
-Verified against controls, because a 100% rate deserves suspicion:
+What remains true is the *physics*, which never depended on the matcher: a DEM render reproduces real lunar imagery at r ≈ 0.53–0.58 and correctly recovers each image's illumination direction. The rendering is sound. Using it by division for matching is not.
 
-| Control | Expected | Observed |
-|---|---|---|
-| Normalised pair still distinct? | not identical | corr −0.316, mean abs diff 76/255, 0.4% identical pixels |
-| Image matched against itself | ~0 displacement | 2775/2775, RMSE 0.205 |
-| Known 7 px shift | recover ±7 | +7.29 |
-| Unrelated terrain | near zero matches | 0 / 5 |
+**What actually works is simpler:** local contrast normalisation, which uses no DEM at all — subtract a local mean, divide by a local standard deviation. It roughly halves the offset scatter versus raw (3.02 → 0.85 px), raises the inlier ratio from 36% to 54%, and doubles coverage.
 
 ### Scale — solved by normalising at a common GSD
 
