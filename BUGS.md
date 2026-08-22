@@ -35,6 +35,17 @@ Rules for writing entries:
 
 ## Log
 
+### BUG-007 — `STANDARD_GEOMETRY` read as acquisition geometry, flattening every render
+
+- **Date:** 2026-08-23
+- **Status:** FIXED
+- **Area:** stage-b-photometric
+- **Symptom:** The first Stage-B ablation did nothing. Correlation moved -0.560 to -0.509 (swing +0.051) and SIFT found 6 raw / 8 normalised matches, none correct. No crash, no warning.
+- **Root cause:** `STANDARD_GEOMETRY = (30.0, 0.0, 30.0)` in the Kaguya label describes the photometric **correction that was applied**, not the geometry the image was **acquired** at. I took 30 deg incidence as the sun position and rendered at 60 deg elevation. The morning/evening mosaics are shot near the terminator, and the USGS correction rescales brightness without removing shadows already baked in at low sun. At 60 deg the render was nearly flat — contrast cv **0.045** against the real image's 0.278, and **zero** shadow pixels — so dividing by it barely altered the image.
+- **Fix:** `scripts/ablation.py` now treats elevation as a free parameter (`ELEVATION_CANDIDATES`) and recovers it alongside azimuth via `best_geometry()`. Recovered geometry is near-terminator (morning az=90 el=5, evening az=240 el=10), where render contrast is cv 1.019 — a 22x increase.
+- **Check:** `python scripts/ablation.py` — raw vs Stage-B SIFT matching scored against the identity ground truth. With the bug present, Stage B gains nothing; with it fixed, 0/44 correct becomes 171/209 across five windows.
+- **Related:** the two-stage search in `best_geometry()` exists because ray-marched shadows at every one of 252 candidates did not finish in 120 s. The coarse pass ranks without shadows and only the top 6 pay for them.
+
 ### BUG-006 — Projected northing in metres was passed to a cosine as if it were degrees
 
 - **Date:** 2026-08-22
