@@ -37,3 +37,6 @@ data/interim/ode_manual.pdf
 
 # Chandrayaan-2 archives (large, re-downloadable from PRADAN)
 data/raw/ch2/*.zip
+
+# LROC NAC test images (large, re-downloadable)
+data/raw/nac/

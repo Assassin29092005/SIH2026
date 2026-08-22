@@ -110,6 +110,27 @@ Defaults sit at the sub-pixel end, since the problem statement demands it explic
 
 `scripts/register.py` writes the deliverable: the warped registered image, a match-point CSV (source x/y, reference x/y, confidence, residual, inlier flag), and a metrics JSON.
 
+### Viewpoint variation
+
+The third challenge the problem statement names. Handled in two parts: the software capability, and an honest test of its limit.
+
+**Model selection.** A similarity or affine transform cannot represent perspective at all — it absorbs the error into a worse fit rather than failing loudly. `scripts/viewpoint.py` fits similarity (4 DOF), affine (6) and homography (8), and selects between them on **held-out** residual, since a higher-DOF model always wins in-sample and would be chosen unconditionally.
+
+Held-out alone was not enough. On Kaguya nadir-vs-nadir pairs — both orthorectified, so **no perspective exists between them** — homography still won 2 of 3 windows, by 5–9%. That is noise rewarding degrees of freedom. A 15% complexity margin fixes it: parsimony is the default and perspective must be earned.
+
+| Control: Kaguya nadir vs nadir | similarity | affine | homography | selected |
+|---|---|---|---|---|
+| held-out median (px) | 0.784 | 0.839 | 0.741 | **similarity** |
+| gain over simpler | — | −7% | +5% | below 15% margin |
+
+All three nadir windows now select `similarity`, correctly reporting no perspective.
+
+**The limit, measured.** Tested on genuinely oblique real data — two LROC NAC images of one site from different orbits, **1.2° vs 58.9° emission angle, a 57.8° difference**, found through ODE's emission-angle index. NAC CDR labels carry no geolocation, so the overlapping rows were searched for by sliding one strip against the other.
+
+**Matching fails completely.** The match-count profile across all offsets is flat — min 1, median 10, max 19, peak/median 2.00 — so the best offset is indistinguishable from any other. At that best offset, full-resolution matching yields **0 usable matches**. For scale, Kaguya pairs of the same terrain give 60–280.
+
+At 58.9° emission the terrain is foreshortened to cos(58.9°) = 0.52 in one axis, with occlusion and entirely different shadowing. **Extreme obliquity is beyond this pipeline.** The capability to fit and select a perspective model exists and is validated; the matcher that must feed it does not survive that geometry. Where between 0° and 58° it breaks is untested.
+
 ## The control gate
 
 Every matching number must pass four tests, or it is not reported:
@@ -164,6 +185,8 @@ python scripts/check_env.py
 | `ohrc_project.py` | Project raw OHRC into a map frame | current |
 | **`remeasure.py`** | **Controlled evaluation — the authoritative harness** | current |
 | `ohrc_vs_kaguya.py` | Real Chandrayaan-2 registration | current |
+| `register.py` | Stage D: sub-pixel, match export, registered product | current |
+| `viewpoint.py` | Model selection and the obliquity limit | current |
 | `ablation.py`, `dense_match.py`, `scale_pipeline.py` | Retracted experiments | **superseded** |
 
 ```bash
@@ -182,7 +205,7 @@ The morning/evening asymmetry is now partly explained: OHRC correlates +0.066 wi
 
 **Does not work:** Stage B for matching. 16× scale. SIFT at any ratio (53 px scatter).
 
-**Known limits:** LoFTR capped near 1024×1024 on CPU. **Uniformity is the weakest result at ~0.19-0.29** and resists both bucketed selection and tiled matching. Viewpoint variation — the third challenge the problem statement names — is untested; only an affine model is fitted, so genuine perspective distortion is unhandled.
+**Known limits:** LoFTR capped near 1024×1024 on CPU. **Uniformity is the weakest result at ~0.19-0.29** and resists both bucketed selection and tiled matching. **Extreme viewpoint obliquity fails outright** — 0 usable matches across a 57.8° emission gap on real NAC data — though homography fitting and model selection are implemented and validated. The obliquity at which matching breaks, somewhere between 0° and 58°, is untested.
 
 ## Project conventions
 
