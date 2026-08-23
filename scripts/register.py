@@ -177,6 +177,9 @@ def fit(pa, pb):
             "rmse": float(np.sqrt((resid[inl] ** 2).mean())) if inl.any() else float("nan")}
 
 
+MIN_TILE_PX = 128   # below this LoFTR has too little context to match reliably
+
+
 def match_tiled(a8, b8, tiles=TILES, overlap=0.0, search=TILE_PAD):
     """Match tile by tile so every region of the frame gets its own attempt.
 
@@ -187,6 +190,10 @@ def match_tiled(a8, b8, tiles=TILES, overlap=0.0, search=TILE_PAD):
     still find its counterpart if the two images are offset.
     """
     h, w = a8.shape
+    # Adapt the tile count to the image: a narrow strip like a projected OHRC
+    # swath (506 px wide) would otherwise be cut into 63 px tiles, which is
+    # below the size LoFTR can match, and the match count collapses.
+    tiles = max(1, min(tiles, min(h, w) // MIN_TILE_PX))
     step_y, step_x = h / tiles, w / tiles
     pad = int(max(step_y, step_x) * overlap) + search
 
@@ -222,14 +229,45 @@ def match_tiled(a8, b8, tiles=TILES, overlap=0.0, search=TILE_PAD):
     return np.vstack(all_a), np.vstack(all_b), np.concatenate(all_c)
 
 
-def register_pair(src, ref, bucket=False, refine=True, tiled=True, tiles=TILES):
+def coarse_offset(a8, b8, min_matches=8):
+    """Gross translation between two images, from a whole-image match.
+
+    Tiled matching only searches a small pad around each tile, so it silently
+    fails when the pair is grossly displaced -- OHRC against Kaguya sits about
+    437 px apart, far outside a 16 px pad. Estimating the shift first and
+    removing it is Stage A doing its job: bring the pair into rough alignment,
+    then let tiling handle coverage.
+    """
+    pa, pb, _ = match_with_conf(a8, b8)
+    if len(pa) < min_matches:
+        return 0, 0, len(pa)
+    dx = float(np.median(pb[:, 0] - pa[:, 0]))
+    dy = float(np.median(pb[:, 1] - pa[:, 1]))
+    return int(round(dx)), int(round(dy)), len(pa)
+
+
+def register_pair(src, ref, bucket=False, refine=True, tiled=True, tiles=TILES,
+                  coarse=True):
     """Full pipeline on one image pair. Returns a result dict."""
     a8, b8 = build_raw_hp(src, None, None), build_raw_hp(ref, None, None)
+    stages = {}
+
+    dx = dy = 0
+    if tiled and coarse:
+        dx, dy, n_coarse = coarse_offset(a8, b8)
+        stages["coarse_matches"] = n_coarse
+        stages["coarse_offset"] = (dx, dy)
+
     if tiled:
-        pa, pb, conf = match_tiled(a8, b8, tiles=tiles)
+        # Shift the reference into rough alignment so each tile's small search
+        # pad is actually looking at the right ground, then undo the shift.
+        b_aligned = np.roll(b8, (-dy, -dx), axis=(0, 1)) if (dx or dy) else b8
+        pa, pb, conf = match_tiled(a8, b_aligned, tiles=tiles)
+        if len(pb):
+            pb = pb + np.array([dx, dy], dtype=float)
     else:
         pa, pb, conf = match_with_conf(a8, b8)
-    stages = {"matched": len(pa)}
+    stages["matched"] = len(pa)
     if len(pa) == 0:
         return None
 

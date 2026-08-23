@@ -40,3 +40,7 @@ data/raw/ch2/*.zip
 
 # LROC NAC test images (large, re-downloadable)
 data/raw/nac/
+
+# demo figures ARE committed: a fresh clone should show results
+# before any imagery is downloaded
+!outputs/

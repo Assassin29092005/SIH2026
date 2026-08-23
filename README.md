@@ -63,7 +63,22 @@ Against Kaguya **evening**, four independent chunks:
 
 Agreement to ~1.7 px across independent chunks, at 66.7% inlier ratio and RMSE 0.593 px (4.39 m). The grids were verified aligned to 0.0 px, so the ~3.4 km offset is not a windowing artifact — it is consistent with the uncorrected geolocation error of an uncontrolled Chandrayaan-2 product, which is precisely why registration is needed.
 
-Against Kaguya **morning** the same chunks disagree wildly (rotations −14° to +19°). Measured explanation: OHRC correlates **+0.066 with evening and −0.031 with morning**, consistent with its illumination resembling evening. Both are weak, and a DEM render explains OHRC barely at all (r = +0.006, against +0.067 for Kaguya over the same terrain) — at 0.26 m, OHRC resolves texture a 10 m DTM cannot model. **The 3.4 km offset still needs independent verification before being claimed as a measurement.**
+**The offset is verified, by two independent methods and the full control gate.**
+
+Registration needed a coarse-alignment stage first: tiled matching only searches a small pad around each tile, so a 437 px displacement sits far outside it. Estimating the gross shift from a whole-image match and removing it before tiling took the OHRC case from 7 matches to **1443**.
+
+| Check | Result |
+|---|---|
+| LoFTR pipeline | dx **+151.64**, dy **−435.59** |
+| Phase correlation, no matcher involved | dx **+151.10**, dy **−434.86** |
+| Agreement | **0.7 px** on a 437 px offset |
+| Roll raw input +15 px | recovered **−15.67** ✓ |
+| Pure noise | **0 matches** ✓ |
+| Constant grey | **0 matches** ✓ |
+
+Final: **1443 matches, 730 inliers (51%), RMSE 0.752 px = 5.56 m, sub-pixel**, on real Chandrayaan-2 data against an independent lunar reference.
+
+Against Kaguya **morning** the chunks disagree wildly. Measured explanation: OHRC correlates **+0.066 with evening and −0.031 with morning**, consistent with its illumination resembling evening. A DEM render explains OHRC barely at all (r = +0.006 against +0.067 for Kaguya on the same terrain) — at 0.26 m, OHRC resolves texture a 10 m DTM cannot model.
 
 ## Stage B: a hypothesis that failed its own test
 
@@ -169,6 +184,25 @@ Chandrayaan-2 coverage, from the footprint shapefiles: **OHRC is polar-dominated
 
 Everything is read in place through GDAL `/vsizip/`; the ~10 GB of Chandrayaan-2 imagery never lands on disk unpacked.
 
+## Run it
+
+One command produces the whole result as a figure.
+
+```bash
+python scripts/demo.py --case all
+```
+
+![Kaguya cross-illumination](outputs/demo_kaguya.png)
+
+![Chandrayaan-2 OHRC](outputs/demo_ohrc.png)
+
+Each figure shows source, reference, the registered checkerboard overlay, the correspondences (green inlier / red rejected), where the match points landed on an 8x8 grid, and the metrics. Results are committed under `outputs/`, so a fresh clone can see them before downloading any imagery. `--list` reports which cases the data currently present supports.
+
+| Case | Matches | Inliers | RMSE | Coverage |
+|---|---|---|---|---|
+| Kaguya morning vs evening | 132 | 65 (49%) | **0.796 px** | 0.34 |
+| **Chandrayaan-2 OHRC vs Kaguya** | **1443** | **730 (51%)** | **0.752 px = 5.56 m** | 0.28 |
+
 ## Setup
 
 Python 3.11. No conda, no WSL, no ISIS3 — `rasterio`'s wheels bundle GDAL with the PDS4/ISIS3/PDS drivers needed for planetary products.
@@ -196,6 +230,7 @@ python scripts/check_env.py
 | `ohrc_vs_kaguya.py` | Real Chandrayaan-2 registration | current |
 | `register.py` | Stage D: sub-pixel, match export, registered product | current |
 | `viewpoint.py` | Model selection and the obliquity limit | current |
+| **`demo.py`** | **One-command end-to-end run with figures** | current |
 | `ablation.py`, `dense_match.py`, `scale_pipeline.py` | Retracted experiments | **superseded** |
 
 ```bash
@@ -211,6 +246,7 @@ python scripts/ohrc_vs_kaguya.py --rows 512
 | Find match points between source and reference | **complete** | LoFTR + local contrast norm, control-gated |
 | **Illumination variation** | **complete** | 0.85 px cross-window spread, 54% inliers; corroborated by phase correlation |
 | **Viewpoint variation** | **complete, envelope measured** | model selection validated on nadir controls; matching succeeds to 12.3° obliquity gap, fails ≥14.9° |
+| Runs on real Chandrayaan-2 data | **complete** | OHRC vs Kaguya: 1443 matches, RMSE 0.752 px, offset corroborated to 0.7 px by phase correlation |
 | **Scale variation** | **complete** | 1× to 8×, spread 0.41–0.92 px, noise rejection 30–56× |
 | **Sub-pixel accuracy of source image** | **complete** | RMSE **0.786–0.893 px** |
 | **Uniform distribution across the images** | **complete** | coverage **0.66**, entropy **0.80** |
@@ -223,13 +259,13 @@ python scripts/ohrc_vs_kaguya.py --rows 512
 
 **Works, controlled:** cross-illumination matching (0.85 px spread, 54% inliers, corroborated two ways); scale handling to 8×; sub-pixel registration at coverage 0.66; transform-model selection; OHRC geolocation fit to 0.152 m; reading every product in place.
 
-**Works, unverified:** OHRC↔Kaguya evening registration is self-consistent across four chunks but implies a 3.4 km offset that needs independent confirmation.
+**Verified:** OHRC↔Kaguya registration passes all four controls and its 437 px (3.4 km) offset is corroborated to 0.7 px by phase correlation, an algorithm sharing no code with the matcher.
 
 The morning/evening asymmetry is now partly explained: OHRC correlates +0.066 with Kaguya evening and −0.031 with morning, consistent with its illumination resembling evening. Both are weak. The more important finding is that a DEM render explains OHRC barely at all (r = +0.006, against +0.067 for Kaguya on the same terrain) — **at 0.26 m, OHRC resolves texture that a 10 m DTM cannot model**, so DEM-based illumination reasoning cannot bridge a 28× resolution gap.
 
 **Does not work:** Stage B for matching. 16× scale. SIFT at any ratio (53 px scatter).
 
-**Known limits:** LoFTR capped near 1024×1024 on CPU, which is what bounds scale at 8× rather than anything about the method. Obliquity beyond ~13° is not matchable by this pipeline, and the ladder that measured it confounds obliquity with illumination change. The 3.4 km OHRC↔Kaguya offset remains unverified by an independent method.
+**Known limits:** LoFTR capped near 1024×1024 on CPU, which is what bounds scale at 8× rather than anything about the method. Obliquity beyond ~13° is not matchable, and the ladder that measured it confounds obliquity with illumination change. Matching takes tens of seconds per pair on CPU; a live demo should use the committed figures or a GPU. Whether the 3.4 km offset reflects Chandrayaan-2 geolocation error or residual error in our own projection is not separated — both would produce this signature.
 
 ## Project conventions
 
