@@ -189,14 +189,17 @@ Everything is read in place through GDAL `/vsizip/`; the ~10 GB of Chandrayaan-2
 One command produces the whole result as a figure.
 
 ```bash
+pip install -r requirements.txt
 python scripts/demo.py --case all
 ```
+
+**Runs from a fresh clone.** `samples/` carries 3 MB of real cropped imagery — genuine observations, not synthetic — so the demo works with no downloads. It takes ~20 s per case on CPU and produces identical numbers to the full-resolution data. Downloading the full products (~7 GB) is only needed to work on new regions.
 
 ![Kaguya cross-illumination](outputs/demo_kaguya.png)
 
 ![Chandrayaan-2 OHRC](outputs/demo_ohrc.png)
 
-Each figure shows source, reference, the registered checkerboard overlay, the correspondences (green inlier / red rejected), where the match points landed on an 8x8 grid, and the metrics. Results are committed under `outputs/`, so a fresh clone can see them before downloading any imagery. `--list` reports which cases the data currently present supports.
+Each figure shows source, reference, the registered checkerboard overlay, the correspondences (green inlier / red rejected), where the match points landed on an 8x8 grid, and the metrics. `--list` reports whether each case will use full data or the committed sample.
 
 | Case | Matches | Inliers | RMSE | Coverage |
 |---|---|---|---|---|
@@ -266,6 +269,15 @@ The morning/evening asymmetry is now partly explained: OHRC correlates +0.066 wi
 **Does not work:** Stage B for matching. 16× scale. SIFT at any ratio (53 px scatter).
 
 **Known limits:** LoFTR capped near 1024×1024 on CPU, which is what bounds scale at 8× rather than anything about the method. Obliquity beyond ~13° is not matchable, and the ladder that measured it confounds obliquity with illumination change. Matching takes tens of seconds per pair on CPU; a live demo should use the committed figures or a GPU. Whether the 3.4 km offset reflects Chandrayaan-2 geolocation error or residual error in our own projection is not separated — both would produce this signature.
+
+## What would make this production software
+
+See [ROADMAP.md](ROADMAP.md). The two items that matter most are not features:
+
+1. **Separating Chandrayaan-2 geolocation error from error in our own projection.** The measured 3.4 km offset has two possible causes and we cannot yet distinguish them. Until then it is "the offset between our projected OHRC and the Kaguya frame", not Chandrayaan-2's geolocation error.
+2. **Making the four-part control gate a CI test rather than a script.** It is what caught BUG-011, and it should be able to fail a build.
+
+The roadmap also records what was tried and abandoned — Stage B, blind scale estimation, bucketed selection — so the cost is not paid twice.
 
 ## Project conventions
 

@@ -1,0 +1,23 @@
+{
+  "note": "Small real samples so the demo runs from a fresh clone. Genuine observations, cropped only - no synthetic data.",
+  "kaguya": {
+    "source": "kaguya_morning.png",
+    "reference": "kaguya_evening.png",
+    "gsd_m": 7.403,
+    "title": "Kaguya TC morning vs evening",
+    "sub": "tile N18E009N15E012SC, window (2000,2000) 1024x1024, 7.40 m/px",
+    "src_label": "SOURCE  morning",
+    "ref_label": "REFERENCE  evening",
+    "provenance": "JAXA SELENE TC map products TCO_MAPM04/TCO_MAPE04 via PDS ODE"
+  },
+  "ohrc": {
+    "source": "ohrc_source.png",
+    "reference": "ohrc_reference.png",
+    "gsd_m": 7.403,
+    "title": "Chandrayaan-2 OHRC vs Kaguya TC reference",
+    "sub": "OHRC 0.26 m/px projected to 7.40 m/px, ~0.6N 23.4E",
+    "src_label": "SOURCE  Chandrayaan-2 OHRC",
+    "ref_label": "REFERENCE  Kaguya evening",
+    "provenance": "ISRO PRADAN ch2_ohr_ncp_20210402T0546284043 + JAXA SELENE TC"
+  }
+}

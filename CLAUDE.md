@@ -147,6 +147,12 @@ Baselines to beat: SIFT, ASIFT, phase correlation, off-the-shelf SuperPoint+Ligh
 - Validation is cross-window agreement on the recovered offset, not agreement with an assumed ground truth. Kaguya morning and evening are genuinely offset by 8.25 px; identity correspondence is false.
 - Never report a metric without saying which data split produced it.
 
+## Running it
+
+`python scripts/demo.py --case all` is the end-to-end entry point. It falls back to `samples/` (3 MB of real cropped imagery, committed) when the full products are absent, so it works from a fresh clone. ~20 s per case on CPU.
+
+Forward work is listed in `ROADMAP.md`, including three approaches that were tested and abandoned (Stage B, blind scale estimation, bucketed selection). Read that before reviving any of them.
+
 ## Bug log rule
 
 **Every time a bug is found, append an entry to `BUGS.md` — including how it was resolved.**

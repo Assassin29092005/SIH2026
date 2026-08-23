@@ -3,7 +3,7 @@
   "inlier_count": 65,
   "inlier_ratio": 0.49242424242424243,
   "rmse_px": 0.7961658335160207,
-  "rmse_m": 5.894144425175712,
+  "rmse_m": 5.894015665519101,
   "sub_pixel": true,
   "coverage": 0.34375,
   "entropy": 0.6302065643479962

@@ -30,6 +30,32 @@ from remeasure import build_raw_hp  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "outputs"
+SAMPLES = ROOT / "samples"
+
+
+def load_sample(case):
+    """Committed sample crops, so a fresh clone can run without any download.
+
+    These are genuine observations cropped to a single window -- not synthetic,
+    not rendered. Full-resolution products are ~7 GB across three archives, two
+    of which need accounts, so the repository carries a 3 MB slice instead.
+    """
+    meta_path = SAMPLES / "samples.json"
+    if not meta_path.exists():
+        return None
+    meta = json.loads(meta_path.read_text(encoding="utf-8")).get(case)
+    if not meta:
+        return None
+    src_p, ref_p = SAMPLES / meta["source"], SAMPLES / meta["reference"]
+    if not (src_p.exists() and ref_p.exists()):
+        return None
+    src = cv2.imread(str(src_p), cv2.IMREAD_UNCHANGED)
+    ref = cv2.imread(str(ref_p), cv2.IMREAD_UNCHANGED)
+    if src is None or ref is None:
+        return None
+    return dict(src=src.astype(np.float32), ref=ref.astype(np.float32),
+                gsd=meta["gsd_m"], title=meta["title"], sub=meta["sub"] + "  [sample]",
+                src_label=meta["src_label"], ref_label=meta["ref_label"])
 
 
 def stretch8(img):
@@ -124,7 +150,19 @@ def load_ohrc(rows=1024):
                 ref_label="REFERENCE  Kaguya evening")
 
 
-CASES = {"kaguya": load_kaguya, "ohrc": load_ohrc}
+_FULL = {"kaguya": load_kaguya, "ohrc": load_ohrc}
+
+
+def load_case(case):
+    """Prefer full downloaded data; fall back to the committed sample."""
+    try:
+        got = _FULL[case]()
+    except Exception:
+        got = None
+    return got if got is not None else load_sample(case)
+
+
+CASES = {name: (lambda n=name: load_case(n)) for name in _FULL}
 
 
 def run(case: str, out_path: Path):
@@ -220,8 +258,14 @@ def main() -> int:
     out_dir = ROOT / args.out_dir
     if args.list:
         print("cases runnable with the data currently present:")
-        for name, loader in CASES.items():
-            print(f"  {name:<8} {'ready' if loader() is not None else 'data missing'}")
+        for name in CASES:
+            try:
+                full = _FULL[name]() is not None
+            except Exception:
+                full = False
+            sample = load_sample(name) is not None
+            src = "full data" if full else ("committed sample" if sample else "MISSING")
+            print(f"  {name:<8} {src}")
         return 0
 
     cases = sorted(CASES) if args.case == "all" else [args.case]
