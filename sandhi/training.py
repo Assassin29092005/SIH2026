@@ -178,12 +178,17 @@ def build_pairs(windows, out_dir: Path, *, size: int = 512, per_window: int = 4,
                 continue
 
             name = f"{tile}_{row}_{col}_{i:02d}"
+            # uint16, not float32: sources are uint8 (TMC-2) or non-negative
+            # int16 (NAC), so this is lossless and stores ~45% smaller, which
+            # matters because the set has to be uploaded to Kaggle. The clip is
+            # required — INTER_CUBIC rings at the padding edge and undershoots
+            # to about -180, which would wrap to 65356 on an unclipped cast.
             np.savez_compressed(
                 out_dir / "pairs" / f"{name}.npz",
-                image0=crop.astype(np.float32),
-                image1=warped.astype(np.float32),
+                image0=np.clip(crop, 0, 65535).astype(np.uint16),
+                image1=np.clip(warped, 0, 65535).astype(np.uint16),
                 mask1=mask,
-                H=H, pa=pa, pb=pb,
+                H=H, pa=pa.astype(np.float32), pb=pb.astype(np.float32),
             )
             # int() on row/col is load-bearing: generators that derive positions
             # from numpy arrays yield np.int64, which json.dumps refuses. The

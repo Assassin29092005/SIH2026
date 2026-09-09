@@ -250,10 +250,12 @@ def forward_conf(a, b):
         raise RuntimeError("conf_matrix not captured - kornia internals changed")
     return _captured["conf"]
 
-# Freeze the CNN backbone: 96 pairs is far too little to retrain feature
-# extraction, and the transformer is where viewpoint reasoning lives.
-# Baseline coarse precision measured locally on one pair: 0.340 - that is the
-# number fine-tuning has to beat.
+# Freeze the CNN backbone: even ~1200 pairs is far too little to retrain feature
+# extraction, and the transformer is where viewpoint reasoning lives. Note this
+# was ALREADY true in the run that failed on 2026-09-09 -- freezing the backbone
+# is necessary and was not sufficient; the learning rate did the damage.
+# The numbers to beat are printed as the baseline below: coarse precision on the
+# held-out scene, and match count on the real Kaguya pair.
 for p in model.backbone.parameters():
     p.requires_grad = False
 trainable = [p for p in model.parameters() if p.requires_grad]
@@ -308,7 +310,11 @@ def real_matches():
 """
 
 TRAIN = """\
-EPOCHS = 8
+# 4, not 8. The training set went from 96 pairs of one tile to ~1200 across five
+# scenes and two sensors, so one epoch is now ~15x more gradient steps than a
+# whole run was before. Fewer passes over more data is also the safer side of
+# the forgetting trade the last run lost.
+EPOCHS = 4
 # 1e-4 destroyed real-pair matching in the 2026-09-09 run (OHRC 1443 -> 6) with
 # the backbone ALREADY frozen -- so the step size itself was the fault, not which
 # parameters were free to move. See BUGS.md BUG-017.
