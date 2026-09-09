@@ -150,7 +150,47 @@ def load_ohrc(rows=1024):
                 ref_label="REFERENCE  Kaguya evening")
 
 
-_FULL = {"kaguya": load_kaguya, "ohrc": load_ohrc}
+def load_tmc(lat=0.5, size=1536):
+    """Chandrayaan-2 TMC-2 ortho against Kaguya TC, on a common grid.
+
+    TMC-2 is the mission's coverage instrument -- 8436 catalogued products
+    against OHRC's 624 -- so this is the case that shows the pipeline on
+    Chandrayaan-2 data at survey scale rather than on a single targeted strip.
+
+    Like OHRC, the source arrives resampled: TMC-2 is 5.05 m/px and Kaguya
+    7.403 m/px, so the source is brought to the reference GSD here rather than
+    inside the demo, because `register_pair` takes no GSD arguments. The ratio
+    is read from the products (1.466), never estimated -- see BUG-010, and
+    BUG-020 for why the non-integer ratio needed a real resampler.
+    """
+    import rasterio
+    from sandhi.pipeline import resample
+    from tmc_vs_kaguya import KAGUYA_GSD_M, TMC_GSD_M, kaguya_over, strip_window
+
+    if not (ROOT / "data" / "raw" / "ch2").exists():
+        return None
+    from ch2_io import open_tmc_pair
+    t = open_tmc_pair()
+    with rasterio.open(t.ortho_path) as src:
+        img, bounds, (row, col) = strip_window(src, lat, size)
+    ref, tile = kaguya_over(bounds, "evening")
+    if ref is None:
+        return None
+
+    src_common = resample(img, KAGUYA_GSD_M / TMC_GSD_M)
+    h = min(src_common.shape[0], ref.shape[0])
+    w = min(src_common.shape[1], ref.shape[1])
+    return dict(src=src_common[:h, :w].astype(np.float32),
+                ref=ref[:h, :w].astype(np.float32),
+                gsd=KAGUYA_GSD_M,
+                title="Chandrayaan-2 TMC-2 vs Kaguya TC reference",
+                sub=f"TMC-2 5.05 m/px resampled to 7.40 m/px (1.466x), "
+                    f"{bounds.bottom:.2f}N {bounds.left:.2f}E, tile {tile}",
+                src_label="SOURCE  Chandrayaan-2 TMC-2",
+                ref_label="REFERENCE  Kaguya evening")
+
+
+_FULL = {"kaguya": load_kaguya, "ohrc": load_ohrc, "tmc": load_tmc}
 
 
 def load_case(case):

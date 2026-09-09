@@ -175,9 +175,9 @@ sandhi survey --site equatorial
 ### Tests
 
 ```bash
-pytest                     # all 28
-pytest -m "not slow"       # 19 unit tests, ~3 s, no imagery or network
-pytest -m slow             # 9 end-to-end on samples/, minutes (runs LoFTR on CPU)
+pytest                     # all 34
+pytest -m "not slow"       # 23 unit tests, ~3 s, no imagery or network
+pytest -m slow             # 11 end-to-end on samples/, minutes (runs LoFTR on CPU)
 pytest tests/test_pipeline.py::test_control_gate_passes
 ```
 
@@ -186,7 +186,7 @@ pytest tests/test_pipeline.py::test_control_gate_passes
 **End-to-end demo** — the entry point. Falls back to `samples/` (3 MB of committed real imagery) when the full products are absent, so it works from a fresh clone. ~20 s per case on CPU.
 
 ```bash
-python scripts/demo.py --case all    # writes outputs/demo_{kaguya,ohrc}.{png,json}
+python scripts/demo.py --case all    # writes outputs/demo_{kaguya,ohrc,tmc}.{png,json}
 python scripts/demo.py --list        # whether each case will use full data or the sample
 ```
 
@@ -202,6 +202,7 @@ python scripts/demo.py --list        # whether each case will use full data or t
 | `python scripts/register.py --self-check` | best variant reaches RMSE < 1.0 px | Kaguya |
 | `python scripts/viewpoint.py --self-check` | selector does not over-pick homography on nadir pairs | Kaguya |
 | `python scripts/ohrc_project.py` | OHRC geolocation polynomial fit residual < 5 px | CH-2 |
+| `python scripts/tmc_vs_kaguya.py --lat 0.5 --size 1536` | TMC-2 registers against Kaguya, all four controls | CH-2 + Kaguya |
 
 **Measurement and evaluation**
 

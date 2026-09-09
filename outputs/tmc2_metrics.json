@@ -1,0 +1,51 @@
+{
+  "match_count": 3085,
+  "inlier_count": 3064,
+  "inlier_ratio": 0.993192868719611,
+  "rmse_px": 0.5950404402459971,
+  "sub_pixel": true,
+  "coverage": 0.890625,
+  "entropy": 0.8939782025806176,
+  "rmse_m": 4.405084379141116,
+  "gsd_m": 7.403,
+  "mean_refinement_shift_px": 0.8560160575314986,
+  "model_kind": "affine",
+  "model": [
+    [
+      1.002255693458554,
+      4.1236314579925656e-05,
+      20.671788172371457
+    ],
+    [
+      0.002089581154779256,
+      0.9996144183209792,
+      2.107023483592221
+    ]
+  ],
+  "stages": {
+    "scale_ratio": 1.465940594059406,
+    "coarse_offset": [
+      22,
+      2
+    ],
+    "coarse_matches": 1396,
+    "matched": 3435,
+    "refined": 3085,
+    "model_selection": {
+      "similarity": {
+        "dof": 4,
+        "held_out_median": 0.6993026887357318
+      },
+      "affine": {
+        "dof": 6,
+        "held_out_median": 0.5146906919303026,
+        "gain_over_simpler": 0.26399440439616917
+      },
+      "homography": {
+        "dof": 8,
+        "held_out_median": 0.49952848608919437,
+        "gain_over_simpler": 0.02945886933420865
+      }
+    }
+  }
+}

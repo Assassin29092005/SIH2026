@@ -10,6 +10,7 @@ import pytest
 
 from sandhi import config, metrics, models, normalize
 from sandhi.pipeline import decimate, to_common_gsd
+from sandhi.pipeline import resample as pipeline_resample
 
 
 # ---------------------------------------------------------------- config
@@ -235,3 +236,26 @@ def test_training_windows_never_touch_evaluation_data():
     ladder = sorted((root / "data" / "raw" / "nac").glob("*.IMG"))[:2]
     for f in ladder:
         assert not any(f.stem in n for n in names), f"ladder image {f.stem} used for training"
+
+
+def test_to_common_gsd_handles_a_non_integer_ratio():
+    """Real cross-sensor ratios are rarely integers.
+
+    TMC-2 (5.05 m/px) against Kaguya (7.403 m/px) is 1.466x. Rounding that to
+    an integer gives 1, which skipped the resampling entirely and left the two
+    images at different scales AND different sizes — surfacing 60 lines later as
+    a LoFTR convolution error on a 150x6 tile. See BUGS.md BUG-020.
+    """
+    fine = np.zeros((1024, 1024), np.float32)     # TMC-2 window
+    coarse = np.zeros((699, 699), np.float32)     # same ground, Kaguya grid
+    s, r, k = to_common_gsd(fine, coarse, 5.05, 7.403)
+    assert k == pytest.approx(7.403 / 5.05, rel=1e-6)
+    assert s.shape == r.shape, f"sizes must match after resampling, got {s.shape} vs {r.shape}"
+
+
+def test_resample_preserves_the_mean():
+    rng = np.random.default_rng(7)
+    img = rng.normal(100, 30, (512, 512)).astype(np.float32)
+    out = pipeline_resample(img, 1.466)
+    assert out.shape == (349, 349)
+    assert out.mean() == pytest.approx(img.mean(), abs=1.0)

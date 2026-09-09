@@ -1,0 +1,10 @@
+{
+  "match_count": 3085,
+  "inlier_count": 2359,
+  "inlier_ratio": 0.7646677471636953,
+  "rmse_px": 0.7036215446666036,
+  "rmse_m": 5.208910295166866,
+  "sub_pixel": true,
+  "coverage": 0.84375,
+  "entropy": 0.8599349999210322
+}

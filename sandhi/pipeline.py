@@ -35,20 +35,41 @@ def decimate(img: np.ndarray, k: int) -> np.ndarray:
     return cv2.resize(img.astype(np.float32), (w, h), interpolation=cv2.INTER_AREA)
 
 
+def resample(img: np.ndarray, factor: float) -> np.ndarray:
+    """Resample by an arbitrary factor. >1 shrinks, area-averaged.
+
+    `decimate` handles integer factors; real cross-sensor ratios are rarely
+    integers (Kaguya/TMC-2 = 1.466, NAC/TMC-2 = 0.099) and rounding one to 1
+    silently skips the resampling entirely. See BUGS.md BUG-020.
+    """
+    if abs(factor - 1.0) < 1e-6:
+        return img
+    h = max(1, int(round(img.shape[0] / factor)))
+    w = max(1, int(round(img.shape[1] / factor)))
+    interp = cv2.INTER_AREA if factor > 1 else cv2.INTER_CUBIC
+    return cv2.resize(img.astype(np.float32), (w, h), interpolation=interp)
+
+
 def to_common_gsd(src: np.ndarray, ref: np.ndarray, src_gsd: float, ref_gsd: float):
     """Bring both images to the coarser ground sample distance.
 
     Both sides must be resampled BEFORE normalisation, not after: normalising at
     different resolutions produces incomparable products (correlation 0.56 at
     k=2, 0.27 at k=4, -0.09 at k=8 between the two orderings).
+
+    The ratio is used as measured, not rounded to an integer. Rounding was
+    invisible for a long time because every ratio exercised was integral by
+    construction: the scale ladder steps 1/2/4/8/16x, and OHRC/Kaguya is 28.5x
+    which rounds to 28 harmlessly. TMC-2/Kaguya is 1.466x, which rounded to 1
+    and skipped the resampling altogether (BUGS.md BUG-020).
     """
     if not src_gsd or not ref_gsd or abs(src_gsd - ref_gsd) < 1e-9:
         return src, ref, 1.0
     if src_gsd < ref_gsd:
-        k = int(round(ref_gsd / src_gsd))
-        return decimate(src, max(k, 1)), ref, float(k)
-    k = int(round(src_gsd / ref_gsd))
-    return src, decimate(ref, max(k, 1)), 1.0 / max(k, 1)
+        k = ref_gsd / src_gsd
+        return resample(src, k), ref, float(k)
+    k = src_gsd / ref_gsd
+    return src, resample(ref, k), 1.0 / k
 
 
 def register(src: np.ndarray, ref: np.ndarray, *,

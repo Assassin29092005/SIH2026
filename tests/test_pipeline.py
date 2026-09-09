@@ -54,6 +54,11 @@ def ohrc():
     return _load("ohrc")
 
 
+@pytest.fixture(scope="module")
+def tmc():
+    return _load("tmc")
+
+
 # --------------------------------------------------------------- pipeline
 def test_kaguya_registers_sub_pixel(kaguya):
     src, ref, meta = kaguya
@@ -73,6 +78,24 @@ def test_ohrc_registers_sub_pixel(ohrc):
     m = r["metrics"]
     assert m["match_count"] > 500
     assert m["sub_pixel"], f"RMSE {m['rmse_px']:.3f} px is not sub-pixel"
+
+
+def test_tmc_registers_with_uniform_coverage(tmc):
+    """Chandrayaan-2 TMC-2, the mission's survey instrument, against Kaguya.
+
+    This is the project's strongest case on the PS's uniformity requirement --
+    coverage ~0.89 against ~0.39 for OHRC -- because TMC-2 and Kaguya are close
+    in scale (1.466x) and both map-projected, so the whole frame carries usable
+    texture rather than a narrow strip.
+    """
+    src, ref, meta = tmc
+    r = pipeline.register(src, ref, gsd_m=meta["gsd_m"])
+    assert r is not None
+    m = r["metrics"]
+    assert m["match_count"] > 1000
+    assert m["sub_pixel"], f"RMSE {m['rmse_px']:.3f} px is not sub-pixel"
+    assert m["inlier_ratio"] > 0.8
+    assert m["coverage"] > 0.7, f"coverage {m['coverage']:.3f} below the TMC-2 baseline"
 
 
 def test_coarse_alignment_is_what_makes_ohrc_work(ohrc):
@@ -129,7 +152,7 @@ def test_writes_the_three_deliverables(kaguya, tmp_path):
 
 
 # ----------------------------------------------------------- CONTROL GATE
-@pytest.mark.parametrize("case", ["kaguya", "ohrc"])
+@pytest.mark.parametrize("case", ["kaguya", "ohrc", "tmc"])
 def test_control_gate_passes(case):
     """The gate that caught the fabricated 100% result. Must not regress."""
     src, ref, _ = _load(case)

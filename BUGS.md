@@ -35,6 +35,17 @@ Rules for writing entries:
 
 ## Log
 
+### BUG-020 — a non-integer GSD ratio was silently rounded to 1, skipping resampling entirely
+
+- **Date:** 2026-09-10
+- **Status:** FIXED
+- **Area:** stage-c-matching
+- **Symptom:** Registering Chandrayaan-2 TMC-2 (5.05 m/px) against Kaguya TC (7.403 m/px) died deep inside kornia: `RuntimeError: Calculated padded input size per channel: (150 x 6). Kernel size: (7 x 7). Kernel size can't be greater than actual input size`. The traceback points at a ResNet convolution, eight frames below anything this project wrote.
+- **Root cause:** `to_common_gsd` computed the resampling factor as `int(round(ref_gsd / src_gsd))`. For TMC-2/Kaguya that is `int(round(1.466))` = **1**, and `decimate(img, 1)` returns the image untouched. The declared 1.466x scale difference was discarded without a word, so the two images reached the matcher at different scales *and* different sizes (1024 vs 699), and the tiler then cut slivers out of the mismatch. **The crash is the lucky outcome.** Had the sizes happened to agree, matching would have proceeded across an uncorrected 1.47x scale difference and simply produced worse numbers, with nothing to indicate why.
+- **Why it survived this long:** every ratio previously exercised was integral by construction. The scale ladder steps 1/2/4/8/16x deliberately, and OHRC/Kaguya is 28.5x, which rounds to 28 — a 1.8% error, invisible. TMC-2 is the first real cross-sensor pair whose ratio is near 1 but not 1, where rounding is not a small error but a complete no-op. Testing only round numbers hid a bug that only non-round numbers can expose.
+- **Fix:** `sandhi/pipeline.py:38` — added `resample()` for arbitrary factors (INTER_AREA when shrinking, preserving the area-averaging that BUG-011-era work established as necessary), and `to_common_gsd` now uses the measured ratio rather than a rounded integer. `decimate()` is unchanged and still used for integer paths.
+- **Check:** `tests/test_units.py::test_to_common_gsd_handles_a_non_integer_ratio` asserts that a 1024 px TMC-2 window and a 699 px Kaguya window over the same ground come out the **same shape**, with k = 7.403/5.05 to 1e-6. `test_resample_preserves_the_mean` guards the area averaging.
+
 ### BUG-019 — a re-download after retraining silently returned the previous run's weights
 
 - **Date:** 2026-09-10

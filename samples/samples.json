@@ -19,5 +19,15 @@
     "src_label": "SOURCE  Chandrayaan-2 OHRC",
     "ref_label": "REFERENCE  Kaguya evening",
     "provenance": "ISRO PRADAN ch2_ohr_ncp_20210402T0546284043 + JAXA SELENE TC"
+  },
+  "tmc": {
+    "source": "tmc_source.png",
+    "reference": "tmc_reference.png",
+    "gsd_m": 7.403,
+    "title": "Chandrayaan-2 TMC-2 vs Kaguya TC reference",
+    "sub": "TMC-2 5.05 m/px resampled to 7.40 m/px (1.466x), 0.24N 70.93E, tile N03E069N00E072SC",
+    "src_label": "SOURCE  Chandrayaan-2 TMC-2",
+    "ref_label": "REFERENCE  Kaguya evening",
+    "provenance": "ISRO PRADAN ch2_tmc_ndn_20201126T1610528086 ortho + JAXA SELENE TC evening"
   }
 }
