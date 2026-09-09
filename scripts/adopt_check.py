@@ -104,6 +104,12 @@ def check_provenance(weights: str) -> list[str]:
         return [f"{report.name} is not valid JSON: {e}"]
 
     problems = []
+    if r.get("checkpoint_saved") is False:
+        problems.append(
+            "the run saved NO checkpoint -- every epoch either failed to improve "
+            f"the held-out metric or fell below the real-pair floor "
+            f"({r.get('real_match_floor')} of {r.get('baseline_real_matches')}). "
+            "Any .pt beside this report is from an earlier run")
     if "baseline_real_matches" not in r:
         problems.append(
             "report has no 'baseline_real_matches' -- it predates the real-pair "

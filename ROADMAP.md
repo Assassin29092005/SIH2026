@@ -105,29 +105,47 @@ Each of these cost real time. They are listed so nobody spends that time again.
 
 ---
 
-## Fine-tuning, next attempt
+## Fine-tuning on warped pairs — closed, twice measured
 
-The 2026-09-09 run is above under *Deliberately not planned* — the configuration
-is dead, the direction is not. Three changes, in order of expected effect:
+Two runs, seven weeks of ideas apart in content and one day apart in time. Every
+fault diagnosed after the first was fixed before the second. The outcome did not
+move.
 
-1. **More terrain, from sources evaluation does not touch.** Training on one
-   tile is the dominant fault — and that tile was evaluation data (BUG-017).
-   No download is needed: TMC-2 ortho carries 3.55 Gpx and LROC NAC files `[2:]`
-   another 1.06 Gpx, neither used by any acceptance criterion. That is 4.6 Gpx
-   across two sensors against 0.026 Gpx of one tile. `sandhi.training.safe_windows()`
-   encodes the eligibility rules.
-2. **Lower the learning rate.** The CNN backbone was *already* frozen in the
-   failed run — only the coarse transformer moved — so the step size itself was
-   the fault, not which parameters were free. 1e-4 on the transformer for 8
-   epochs was enough to lose general matching. Now 2e-5.
-3. **Select on real pairs, not on the warped validation split.** The warped
-   metric rose while the real one fell, so it cannot be the checkpoint
-   criterion. Score each epoch with `scripts/adopt_check.py` and keep the
-   checkpoint that wins there.
+| | Run 1 (2026-09-09) | Run 2 (2026-09-10) |
+|---|---|---|
+| Training pairs | 48 crops, 1 tile | 1251 pairs, 5 scenes |
+| Source terrain | 0.026 Gpx | 4.6 Gpx, two sensors |
+| Overlaps evaluation data | yes (BUG-017) | no, asserted by test |
+| Learning rate | 1e-4 | 2e-5 |
+| CNN backbone | frozen | frozen |
+| Warped val precision | 0.087 -> 0.391 | 0.109 -> 0.575 |
+| **Real-pair matches** | **132 -> 47** | **245 -> 63 by epoch 1** |
+| Checkpoint adopted | no | **none ever saved** |
 
-Until then the pretrained `outdoor` weights remain the default in
-`sandhi/config.py`, and `--weights` exists purely so the comparison stays one
-flag away.
+Run 2 improved its training metric **5.3x** and lost **74% of real matches
+within a single epoch**. The per-epoch real-pair guard rejected all four epochs,
+so `loftr_lunar_best.pt` was never written — the file on disk stayed
+byte-identical to run 1's rejected checkpoint, which is how we know.
+
+**Why it fails, and why more data cannot fix it.** A training pair here is an
+image and a warped copy of *itself*. The two views are photometrically
+identical, so the cheapest solution to the training task is exact appearance
+correspondence — and that is precisely the crutch a matcher must give up to
+survive a lunar illumination change, where a crater lit from the east is close
+to pixel-identical to a dome lit from the west. The task does not merely fail to
+teach illumination invariance; it rewards unlearning it. That predicts the
+collapse to appear on the cross-illumination pair specifically and immediately,
+which is exactly what was measured.
+
+**What a real attempt would need.** Pairs that vary illumination *and* viewpoint
+with correspondence that is neither warped nor estimated. That means real
+multi-look NAC imagery with geometry from SPICE, which needs the ISIS3 / ALE
+path CLAUDE.md budgets a week for. Until that exists there is no honest label
+for the axis that matters, and the pretrained MegaDepth `outdoor` weights remain
+the default in `sandhi/config.py`.
+
+`--weights` and `scripts/adopt_check.py` stay: the comparison is one flag away
+and the bar is already encoded, so a future attempt is cheap to judge.
 
 ---
 

@@ -13,6 +13,22 @@ HERE = Path(__file__).resolve().parent
 MD_INTRO = """\
 # SANDHI — LoFTR fine-tuning for viewpoint robustness
 
+> **RESULT, 2026-09-10: this approach was measured twice and rejected twice.**
+> Run 2 raised warped validation precision 0.109 → 0.575 while real-pair
+> matching fell 245 → 63 within one epoch. The per-epoch guard rejected all four
+> epochs and no checkpoint was saved. Run 1 failed the same way with 26× less
+> data, a higher learning rate, and contaminated sources.
+>
+> The training signal is the fault: a pair is an image and a warped copy of
+> *itself*, photometrically identical, so the cheapest solution to the task is
+> exact appearance matching — the precise crutch a matcher must abandon to
+> survive a lunar illumination change. More data cannot fix a task that rewards
+> unlearning the thing being tested. See `ROADMAP.md`.
+>
+> The notebook is kept because it is correct, instrumented and cheap to re-run
+> against a better training signal. Never adopt its output without
+> `scripts/adopt_check.py`.
+
 **Target: viewpoint, not illumination.** That choice is measured, not assumed.
 
 Cross-illumination looked like the obvious target — it is the project's headline
@@ -356,6 +372,7 @@ print(f"baseline (pretrained)   val loss {base_loss:.4f}  coarse precision {base
 
 history = []
 best = base_prec
+saved_any = False        # did any epoch clear BOTH bars?
 for ep in range(1, EPOCHS + 1):
     t0 = time.time()
     tr_loss, tr_prec = run_split(train_files, train=True)
@@ -372,6 +389,7 @@ for ep in range(1, EPOCHS + 1):
     flag = ""
     if va_prec > best and held:
         best = va_prec
+        saved_any = True
         torch.save(model.state_dict(), "loftr_lunar_best.pt")
         flag = "  <- saved"
     elif va_prec > best:
@@ -381,13 +399,22 @@ for ep in range(1, EPOCHS + 1):
 
 print(f"\\nbaseline coarse precision {base_prec:.3f} -> best {best:.3f}"
       f"  ({(best-base_prec)*100:+.1f} points)")
-if best <= base_prec:
-    print("NO IMPROVEMENT. Do not adopt these weights.")
+if not saved_any:
+    print("NO CHECKPOINT SAVED. Every epoch either failed to improve the held-out")
+    print(f"metric or dropped real-pair matches below {0.8*base_real:.0f} "
+          f"(80% of the {base_real} baseline).")
+    print("loftr_lunar_best.pt, if present, is NOT from this run.")
 """
 
 EXPORT = """\
+# checkpoint_saved is load-bearing downstream. If no epoch cleared both bars,
+# loftr_lunar_best.pt is NOT from this run -- it is whatever was in the working
+# directory, which on a re-run is the previous run's file. A fresh report beside
+# a stale checkpoint otherwise looks entirely legitimate (BUGS.md BUG-019).
 json.dump({"baseline_val_precision": base_prec, "best_val_precision": best,
            "baseline_real_matches": base_real,
+           "real_match_floor": 0.8 * base_real,
+           "checkpoint_saved": bool(saved_any),
            "held_out_tile": val_tile, "epochs": EPOCHS, "lr": LR,
            "history": history},
           open("finetune_report.json", "w"), indent=2)
