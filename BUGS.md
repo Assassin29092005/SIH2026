@@ -35,6 +35,17 @@ Rules for writing entries:
 
 ## Log
 
+### BUG-019 — a re-download after retraining silently returned the previous run's weights
+
+- **Date:** 2026-09-10
+- **Status:** FIXED
+- **Area:** env
+- **Symptom:** After retraining on Kaggle, `kaggle kernels output` reported both files downloaded and both had fresh timestamps. The report was byte-for-byte the previous run's: `epochs: 8`, `lr: 0.0001`, `held_out_tile: "N18E009N15E012SC"`, and identical loss/precision histories. Nothing errored.
+- **Root cause:** `kaggle kernels output` fetches the last **saved version** of a notebook, not the state of the draft session. Re-running cells in the editor does not create a version, so the CLI happily served the older version's artefacts. Fresh mtimes come from the download itself and say nothing about the content, so the operation is indistinguishable from success at the shell.
+- **Fix:** `scripts/adopt_check.py:84` — `check_provenance()` refuses to evaluate a checkpoint whose sibling `finetune_report.json` lacks `baseline_real_matches` (top level) or `real_matches` (per history entry). Those keys exist only in the notebook that introduced the real-pair guard, so their absence identifies a pre-guard run exactly. It prints the offending `epochs`/`lr`/`held_out_tile` and the Kaggle fix, and exits 1. `--skip-provenance` overrides deliberately.
+- **Independent tell, for humans:** `held_out_tile` was a Kaggle tile (`N18E009N15E012SC`) while the current training set contains no Kaggle data at all — its scenes are `nac-*` and `tmc2` (BUG-017). A run on the current data cannot produce a Kaguya held-out scene.
+- **Check:** `python scripts/adopt_check.py --weights data/interim/loftr_lunar_best.pt` on the stale pair exits 1 with `STALE CHECKPOINT - refusing to evaluate`, before any imagery is loaded.
+
 ### BUG-018 — training-set build crashed writing its manifest, after every pair was already on disk
 
 - **Date:** 2026-09-09

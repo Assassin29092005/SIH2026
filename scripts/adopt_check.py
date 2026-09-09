@@ -81,9 +81,48 @@ def gate(case: str, weights: str | None) -> dict:
             "checks": {c["name"]: bool(c["passed"]) for c in report.checks}}
 
 
+def check_provenance(weights: str) -> list[str]:
+    """Warn if the checkpoint's report is not from the current notebook.
+
+    `kaggle kernels output` downloads the last SAVED version, not the draft
+    session. Re-running a notebook without Save Version therefore re-downloads
+    the previous run's artefacts, with fresh timestamps and identical content —
+    which looks exactly like a successful new download. That happened on
+    2026-09-10 and would have spent ten minutes re-evaluating weights this
+    script had already rejected.
+
+    The current notebook records a real-pair match count; the run that produced
+    the rejected weights did not. That difference is the fingerprint.
+    """
+    report = Path(weights).with_name("finetune_report.json")
+    if not report.exists():
+        return [f"no finetune_report.json beside {Path(weights).name} -- "
+                "provenance unverifiable"]
+    try:
+        r = json.loads(report.read_text(encoding="utf-8"))
+    except ValueError as e:
+        return [f"{report.name} is not valid JSON: {e}"]
+
+    problems = []
+    if "baseline_real_matches" not in r:
+        problems.append(
+            "report has no 'baseline_real_matches' -- it predates the real-pair "
+            "guard, so this is an OLD run's checkpoint")
+    hist = r.get("history") or [{}]
+    if "real_matches" not in hist[0]:
+        problems.append("history entries carry no 'real_matches' -- same conclusion")
+    if problems:
+        problems.append(
+            f"report: epochs={r.get('epochs')} lr={r.get('lr')} "
+            f"held_out={r.get('held_out_tile')}")
+    return problems
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--weights", required=True, help="fine-tuned checkpoint")
+    ap.add_argument("--skip-provenance", action="store_true",
+                    help="evaluate anyway despite a stale or missing report")
     ap.add_argument("--cases", nargs="*", default=["kaguya", "ohrc"])
     ap.add_argument("--skip-gate", action="store_true",
                     help="skip the control gate (slow); NOT valid for adoption")
@@ -91,6 +130,19 @@ def main() -> int:
 
     if not Path(args.weights).exists():
         print(f"no such checkpoint: {args.weights}")
+        return 1
+
+    stale = check_provenance(args.weights)
+    if stale and not args.skip_provenance:
+        print("=" * 72)
+        print("STALE CHECKPOINT - refusing to evaluate")
+        print("=" * 72)
+        for s in stale:
+            print(f"  - {s}")
+        print("")
+        print("  On Kaggle: Save Version AFTER the run, then re-download; or take")
+        print("  the files straight from the Output panel of the draft session.")
+        print("  Override with --skip-provenance if you know better.")
         return 1
 
     out = {"weights": args.weights, "cases": {}, "gate": {}}
