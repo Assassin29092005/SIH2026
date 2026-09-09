@@ -35,6 +35,17 @@ Rules for writing entries:
 
 ## Log
 
+### BUG-013 — LoFTR in train() mode raises KeyError: 'spv_b_ids'
+
+- **Date:** 2026-09-09
+- **Status:** FIXED
+- **Area:** stage-c-matching
+- **Symptom:** The fine-tuning step crashed on the first forward pass: `KeyError: 'spv_b_ids'` from `kornia/feature/loftr/utils/coarse_matching.py:266` inside `get_coarse_match`.
+- **Root cause:** kornia's `CoarseMatching.get_coarse_match` takes a different branch when `self.training` is True, expecting supervision keys (`spv_b_ids`, `spv_i_ids`, `spv_j_ids`) that only kornia's own training harness writes into the data dict. Calling `model.train()` before a forward pass therefore fails for any external fine-tuning loop.
+- **Fix:** Keep the module in `eval()` and enable gradients explicitly with `torch.set_grad_enabled(True)`. `eval()` affects only dropout and BatchNorm, not autograd, so gradients still flow — verified grad norm 12.73 reaching the trainable parameters, plus a successful optimiser step. It is also the better choice here: at batch size 1, BatchNorm running statistics are more stable than per-batch statistics from a single sample.
+- **Check:** The smoke test in this entry — load a real pair, capture `conf_matrix` via a forward hook, compute the focal loss, `backward()`, assert grad norm > 0. Run it before any Kaggle session.
+- **Why this one mattered:** it would have surfaced on Kaggle, several minutes into a GPU session, after the data upload. **Smoke-test a remote training loop locally on CPU with a small input first** — the crash costs nothing here and a session there.
+
 ### BUG-012 — Sub-pixel refinement subtracted the correlation shift instead of adding it
 
 - **Date:** 2026-08-23

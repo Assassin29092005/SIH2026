@@ -50,3 +50,6 @@ data/raw/nac/
 build/
 dist/
 .pytest_cache/
+
+# training pairs (regenerate with sandhi.training.build_pairs)
+data/interim/trainset/
