@@ -64,15 +64,45 @@ import torch.nn.functional as F
 
 print("torch", torch.__version__, "| cuda", torch.cuda.is_available())
 if torch.cuda.is_available():
-    print("gpu:", torch.cuda.get_device_name(0))
+    print("gpu:", torch.cuda.get_device_name(0),
+          "| sm_%d%d" % torch.cuda.get_device_capability(0))
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 assert DEVICE == "cuda", "Enable the GPU accelerator in Kaggle settings."
+
+# Kaggle ships a torch built for the GPU it gives you. Remember which one, so the
+# next cell can tell whether pip swapped it out from under us (BUGS.md BUG-015).
+TORCH_BEFORE = torch.__version__
 """
 
 INSTALL = """\
 # kornia supplies the LoFTR implementation and the pretrained outdoor weights.
-!pip -q install kornia==0.8.3
+#
+# --no-deps is load-bearing. A plain install lets pip resolve `torch` and replace
+# Kaggle's GPU-matched build with a generic PyPI wheel. Recent wheels are compiled
+# for sm_70 and up, so on a P100 (sm_60) every CUDA kernel then fails with
+# "no kernel image is available for execution on the device" -- and not at import,
+# but on the first real forward pass, minutes later. See BUGS.md BUG-015.
+!pip -q install --no-deps kornia==0.8.3 kornia_rs
 from kornia.feature import LoFTR
+
+if torch.__version__ != TORCH_BEFORE:
+    raise SystemExit(f"pip replaced torch {TORCH_BEFORE} -> {torch.__version__}. "
+                     "Factory-reset the session (Run > Factory reset) and re-run; "
+                     "reinstalling in place will not restore the CUDA kernels.")
+
+# Launch one real kernel before spending epochs on a build that cannot run here.
+# Checking get_arch_list() alone is not decisive -- PTX entries can JIT for archs
+# the list does not name -- so this measures instead of predicting.
+cc = torch.cuda.get_device_capability(0)
+try:
+    (torch.zeros(8, 8, device="cuda") @ torch.zeros(8, 8, device="cuda")).sum().item()
+    torch.cuda.synchronize()
+    print(f"torch {torch.__version__} | CUDA kernels OK on sm_{cc[0]}{cc[1]}")
+except Exception as e:
+    raise SystemExit(
+        f"torch {torch.__version__} has no usable kernels for sm_{cc[0]}{cc[1]} "
+        f"(built for {torch.cuda.get_arch_list()}).\\n"
+        f"Switch the accelerator to GPU T4 x2 (sm_75) in Session options, or factory-reset.\\n{e}")
 """
 
 DATA = """\

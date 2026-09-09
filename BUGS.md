@@ -35,6 +35,16 @@ Rules for writing entries:
 
 ## Log
 
+### BUG-015 — CUDA "no kernel image is available for execution on the device" on the first LoFTR forward pass
+
+- **Date:** 2026-09-09
+- **Status:** OPEN — guard added, environment cause not yet confirmed
+- **Area:** env
+- **Symptom:** On Kaggle, `torch.cuda.is_available()` returned True and the notebook ran through setup, install and data loading, then died on the very first real forward pass inside the baseline measurement: `AcceleratorError: CUDA error: no kernel image is available for execution on the device`, raised at `kornia/feature/loftr/loftr.py:148` in `self.backbone(...)`. `cudaErrorNoKernelImageForDevice`.
+- **Root cause:** Not established from the traceback alone, and there are two candidates that produce the identical error. (a) The installed torch wheel contains no compiled kernels for the selected GPU's compute capability — recent CUDA 12.8 builds are compiled for sm_70 and up, so a P100 (sm_60) has nothing to run. (b) `pip install kornia==0.8.3` resolved `torch` as a dependency and replaced Kaggle's GPU-matched build with a generic PyPI wheel. Note (b) does **not** take effect in the same session if `import torch` already ran — the loaded shared objects stay mapped — so it only bites after a restart, which is why the version-comparison guard below cannot be the whole answer. `torch.cuda.is_available()` is not evidence of a usable build: it reports driver and device presence, not whether the wheel has kernels for that device, so the failure surfaces minutes later at the first kernel launch rather than at setup.
+- **Fix:** `training/make_notebook.py` — (1) `--no-deps` on the kornia install, plus `kornia_rs` explicitly, so pip cannot touch torch; (2) `TORCH_BEFORE` recorded in the setup cell and compared after the install, exiting with an instruction to factory-reset rather than reinstall in place; (3) a real 8x8 CUDA matmul immediately after import, which fails loudly with the device's `sm_XX` and `torch.cuda.get_arch_list()` before any epoch is spent. The setup cell now also prints the device compute capability, which is the measurement that discriminates (a) from (b).
+- **Check:** The generated notebook launches a CUDA kernel in the install cell. On a GPU the wheel cannot serve, it raises `SystemExit` naming `sm_XX` and the built-for list, instead of reaching the baseline pass. Locally: `python training/make_notebook.py` then `ast.parse` every code cell.
+
 ### BUG-014 — Kaggle notebook reported "0 training pairs" with the dataset correctly attached
 
 - **Date:** 2026-09-09
