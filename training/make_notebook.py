@@ -99,10 +99,13 @@ try:
     torch.cuda.synchronize()
     print(f"torch {torch.__version__} | CUDA kernels OK on sm_{cc[0]}{cc[1]}")
 except Exception as e:
+    # `from None` breaks the exception chain deliberately: IPython's traceback
+    # formatter crashes on a SystemExit chained off a CUDA error and buries the
+    # message under its own traceback. Measured on Kaggle, 2026-09-09.
     raise SystemExit(
         f"torch {torch.__version__} has no usable kernels for sm_{cc[0]}{cc[1]} "
         f"(built for {torch.cuda.get_arch_list()}).\\n"
-        f"Switch the accelerator to GPU T4 x2 (sm_75) in Session options, or factory-reset.\\n{e}")
+        f"Switch the accelerator to GPU T4 x2 (sm_75) in Session options.\\n{e}") from None
 """
 
 DATA = """\
