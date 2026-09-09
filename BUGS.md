@@ -35,6 +35,27 @@ Rules for writing entries:
 
 ## Log
 
+### BUG-018 — training-set build crashed writing its manifest, after every pair was already on disk
+
+- **Date:** 2026-09-09
+- **Status:** FIXED
+- **Area:** data-ingest
+- **Symptom:** `build_pairs()` ran for about ten minutes, wrote 195+ `.npz` pairs, then died on the final line: `TypeError: Object of type int64 is not JSON serializable`.
+- **Root cause:** `PairSpec.row/col` were stored as whatever the window generator yielded. `kaguya_windows` builds positions with `int(rng.integers(...))` so they are Python ints, but `tmc_windows` derives them from a numpy array (`np.linspace(...).astype(int)` plus an offset), which yields `np.int64`. `json.dumps` has no encoder for numpy scalars. The failure surfaced only at the very end because the manifest is written once, after the loop — so the expensive work was complete and thrown away.
+- **Fix:** `sandhi/training.py:190` — cast at the point of record construction (`row=int(row), col=int(col)`) rather than in each generator, so any future window source is safe by default.
+- **Check:** `json.dumps(asdict(PairSpec(...)))` succeeds for a spec built from numpy scalars. In practice: re-running `build_pairs` over `safe_windows()` now writes `manifest.json` to completion.
+
+### BUG-017 — the fine-tune trained on a tile that supplies an evaluation image
+
+- **Date:** 2026-09-09
+- **Status:** FIXED
+- **Area:** eval
+- **Symptom:** Not a crash. The 2026-09-09 fine-tune split its 96 pairs by tile, holding out `N18E009N15E012SC` and training on `N03E021N00E024SC`, and this was described as a clean held-out split. It is not one. Only two Kaguya tiles are downloaded, and **both are evaluation data**: `N18E009N15E012SC` is the `kaguya` sample case directly (window (2000,2000), stated in `samples/samples.json`), and `N03E021N00E024SC` supplies the *reference* image for the `ohrc` sample case — the OHRC strip sits at ~0.6N 23.4E, which lies inside that tile's 0-3N, 21-24E bounds.
+- **Root cause:** Training data was chosen by what happened to be downloaded rather than by what evaluation depends on. The tile-holdout logic was correct in itself and looked rigorous, which is what let it pass review: it prevented terrain leaking between train and validation *inside* the fine-tune, while leaking training terrain into the project's headline evaluation cases. The same oversight reaches LROC NAC, where `scripts/viewpoint.py:nac_pair()` uses `sorted(glob("*.IMG"))[:2]` as the obliquity ladder — the exact criterion the fine-tune exists to improve, so training on those two files would have let the ladder score itself.
+- **Consequence for the rejection:** none, and it makes the rejection stronger. Training on `N03E021` should have *helped* the `ohrc` case; that case still collapsed 1443 -> 6 matches. A model that degrades on data it was trained on has not been unlucky in its split.
+- **Fix:** `sandhi/training.py` — added `safe_windows()`, which sources training crops only from TMC-2 ortho (3.55 Gpx, no evaluation use) and LROC NAC files `[2:]` (1.06 Gpx, ladder pair excluded), documenting per-source why each is or is not eligible. Both Kaguya tiles and OHRC are excluded outright. `nac_windows(skip=2)` carries the reason in its docstring so the exclusion is not silently dropped by a later edit.
+- **Check:** `sandhi.training.safe_windows()` yields only `tmc2-` and `nac-` names, never `kaguya`/`ohrc`, and never NAC files 0 or 1. Assert on the name prefixes of the generated manifest before any training run.
+
 ### BUG-016 — a degenerate 2-inlier fit reported RMSE 0.0000 px, the best number in the project
 
 - **Date:** 2026-09-09

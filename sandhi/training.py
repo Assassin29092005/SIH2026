@@ -185,8 +185,12 @@ def build_pairs(windows, out_dir: Path, *, size: int = 512, per_window: int = 4,
                 mask1=mask,
                 H=H, pa=pa, pb=pb,
             )
+            # int() on row/col is load-bearing: generators that derive positions
+            # from numpy arrays yield np.int64, which json.dumps refuses. The
+            # pairs are written before the manifest, so this failed only after
+            # ~10 minutes of work with every .npz already on disk (BUG-018).
             manifest.append(asdict(PairSpec(
-                tile=tile, row=row, col=col, size=size,
+                tile=tile, row=int(row), col=int(col), size=size,
                 homography=H.tolist(), tilt_deg=float(tilt),
                 rotation_deg=rot, scale=scl)) | {"name": name,
                                                  "n_correspondences": int(len(pa))})
@@ -217,6 +221,139 @@ def kaguya_windows(tiles, per_tile: int = 24, size: int = 512, seed: int = 0):
                 if img.std() < 1.0:        # blank or saturated
                     continue
                 yield f"{tile}-{kind}", row, col, img
+
+
+def nac_windows(per_file: int = 60, size: int = 512, seed: int = 0, skip: int = 2):
+    """Real windows from LROC NAC strips. Generator.
+
+    `skip` drops the first N files in sorted order. That is not arbitrary:
+    `scripts/viewpoint.py:nac_pair()` takes `sorted(NAC_DIR.glob("*.IMG"))[:2]`
+    as the obliquity ladder, which is the acceptance criterion this training is
+    trying to move. Training on those two would make the ladder score itself.
+    """
+    import rasterio
+
+    rng = np.random.default_rng(seed)
+    files = sorted((Path(__file__).resolve().parent.parent /
+                    "data" / "raw" / "nac").glob("*.IMG"))[skip:]
+    for f in files:
+        with rasterio.open(f) as s:
+            h, w = s.height, s.width
+            for _ in range(per_file):
+                row = int(rng.integers(0, h - size))
+                col = int(rng.integers(0, w - size))
+                img = s.read(1, window=rasterio.windows.Window(col, row, size, size))
+                img = img.astype(np.float32)
+                if img.std() < 1.0 or not np.isfinite(img).all():
+                    continue
+                yield f"nac-{f.stem}", row, col, img
+
+
+def _swath_centre(src, probes: int = 7):
+    """Fit the imaged swath's column centre as a function of row.
+
+    A TMC-2 ortho is a map-projected orbital strip, so the imaged data is a
+    diagonal band inside a much larger bounding rectangle: measured on
+    `ch2_tmc_ndn_20201126T1610528086`, the valid columns run 5634..10021 near the
+    top and 421..4837 near the bottom, roughly 4000 px wide throughout. Sampling
+    (row, col) uniformly therefore lands in zero padding almost every time --
+    three random windows in a row came back empty, which is what made the first
+    version of this generator yield nothing at all.
+
+    Returns (centre_fn, half_width).
+    """
+    rows, centres, widths = [], [], []
+    for frac in np.linspace(0.05, 0.95, probes):
+        r = int(frac * src.height)
+        band = src.read(1, window=rasterio_window(0, r, src.width, 8))
+        idx = np.flatnonzero(band.max(axis=0) > 0)
+        if idx.size < 512:
+            continue
+        rows.append(r)
+        centres.append(0.5 * (idx[0] + idx[-1]))
+        widths.append(idx[-1] - idx[0])
+    if len(rows) < 2:
+        raise RuntimeError("could not locate the TMC-2 swath")
+    slope, intercept = np.polyfit(rows, centres, 1)
+    return (lambda r: slope * r + intercept), int(min(widths) // 2)
+
+
+def rasterio_window(col, row, w, h):
+    from rasterio.windows import Window
+    return Window(col, row, w, h)
+
+
+def tmc_windows(n: int = 240, size: int = 512, seed: int = 0, block: int = 1536):
+    """Real windows from the Chandrayaan-2 TMC-2 ortho strip. Generator.
+
+    3.55 Gpx on one strip, read in place through /vsizip/. The largest genuine
+    source on disk, and the only training source from the PS's own spacecraft:
+    the task is Chandrayaan-2 imagery, so Chandrayaan-2 texture is closer to the
+    deployment domain than Kaguya is.
+
+    Reads a few large blocks and cuts crops out of them rather than reading each
+    crop separately. The file is striped one row per block and uncompressed, so a
+    512-px-wide window still touches 512 strips; one 1536 block costs about what
+    one 512 window costs, and yields nine.
+    """
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+    import rasterio
+    from ch2_io import open_tmc_pair
+
+    rng = np.random.default_rng(seed)
+    t = open_tmc_pair()
+    per_block = (block // size) ** 2
+    n_blocks = max(1, int(np.ceil(n / per_block)))
+
+    with rasterio.open(t.ortho_path) as src:
+        centre_of, half = _swath_centre(src)
+        # Spread blocks evenly down the strip: adjacent crops share terrain, so
+        # diversity comes from where the blocks sit, not from how many crops
+        # each yields.
+        for br in np.linspace(0, src.height - block, n_blocks).astype(int):
+            c0 = int(centre_of(br + block / 2) - half +
+                     rng.integers(0, max(1, 2 * half - block)))
+            c0 = int(np.clip(c0, 0, src.width - block))
+            data = src.read(1, window=rasterio_window(c0, br, block, block))
+            for dy in range(0, block - size + 1, size):
+                for dx in range(0, block - size + 1, size):
+                    img = data[dy:dy + size, dx:dx + size].astype(np.float32)
+                    if img.std() < 1.0 or not np.isfinite(img).all():
+                        continue          # clipped corner of the diagonal swath
+                    # Reject crops holding any real amount of the swath's black
+                    # padding. A straight high-contrast edge is the strongest
+                    # feature in an otherwise texture-poor lunar crop, and it
+                    # survives the warp -- so the matcher would learn to align
+                    # the padding instead of the terrain. That is the failure
+                    # mode of BUG-011, reintroduced through the training set.
+                    if (img <= 0).mean() > 0.02:
+                        continue
+                    yield "tmc2", br + dy, c0 + dx, img
+
+
+def safe_windows(seed: int = 0, size: int = 512):
+    """Every training window that is disjoint from all evaluation data.
+
+    The first fine-tune trained on Kaguya tile N03E021N00E024SC, which is also
+    where the OHRC sample's *reference* image comes from (~0.6N 23.4E lies
+    inside 0-3N, 21-24E). The other tile, N18E009N15E012SC, is the Kaguya sample
+    itself. So both downloaded Kaguya tiles are evaluation data and neither may
+    be trained on. See BUGS.md BUG-017.
+
+    What is left, and why it is enough:
+
+    | source            | pixels   | status                                  |
+    |-------------------|----------|-----------------------------------------|
+    | TMC-2 ortho       | 3.55 Gpx | train — Chandrayaan-2, no eval use      |
+    | LROC NAC [2:]     | 1.06 Gpx | train — ladder pair excluded            |
+    | Kaguya (2 tiles)  | 0.30 Gpx | EVAL — both sample cases                |
+    | OHRC              | 0.94 Gpx | EVAL ONLY per the curriculum            |
+
+    4.6 Gpx across two sensors, against 0.026 Gpx of one tile last time.
+    """
+    yield from tmc_windows(seed=seed, size=size)
+    yield from nac_windows(seed=seed + 1, size=size)
 
 
 def coarse_assignment(H: np.ndarray, size: int, stride: int = 8):

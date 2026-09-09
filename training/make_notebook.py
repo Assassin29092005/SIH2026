@@ -140,16 +140,25 @@ if not files:
                      + "\\n  ".join(seen[:40]))
 print(f"{len(files)} training pairs under {files[0].parent}")
 
-# Hold out a whole TILE, not random pairs. Pairs from one tile share terrain, so
-# a random split would leak the same ground into train and validation and the
-# validation number would be optimistic.
+# Hold out a whole SOURCE SCENE, not random pairs. Pairs from one scene share
+# terrain, so a random split would leak the same ground into train and validation
+# and the validation number would be optimistic.
+#
+# Names are "<source>_<row>_<col>_<nn>", where source is "tmc2" or
+# "nac-<productid>". Splitting on "-" was correct for the old Kaguya-only naming
+# and is wrong here: every TMC crop would become its own scene.
 def tile_of(p):
-    return p.stem.split("-")[0]
+    return p.stem.rsplit("_", 3)[0]
 
 tiles = sorted({tile_of(f) for f in files})
-print("tiles:", tiles)
-assert len(tiles) >= 2, f"need >=2 tiles to hold one out, got {tiles}"
-val_tile = tiles[-1]
+print("scenes:", tiles)
+assert len(tiles) >= 2, f"need >=2 scenes to hold one out, got {tiles}"
+
+# Prefer holding out a NAC scene: it keeps the large TMC-2 source in training,
+# and validating on a different NAC scene is the generalisation that matters.
+# Falls back to the last scene if there is no NAC.
+_nac = [t for t in tiles if t.startswith("nac")]
+val_tile = _nac[-1] if _nac else tiles[-1]
 train_files = [f for f in files if tile_of(f) != val_tile]
 val_files   = [f for f in files if tile_of(f) == val_tile]
 print(f"train {len(train_files)} pairs | val {len(val_files)} pairs (held-out tile {val_tile})")
@@ -252,9 +261,58 @@ print(f"trainable {sum(p.numel() for p in trainable)/1e6:.2f} M "
       f"of {sum(p.numel() for p in model.parameters())/1e6:.2f} M")
 """
 
+REAL_GUARD = """\
+# The 2026-09-09 run improved its warped validation metric 4.5x while real-pair
+# matching collapsed (OHRC 1443 -> 6). So the warped metric CANNOT be the
+# checkpoint criterion. This scores the model on the genuine Kaguya
+# morning/evening sample shipped in the dataset, using the same local-contrast
+# normalisation the pipeline uses, and counts matches at the production
+# confidence threshold -- the exact quantity that fell last time, every epoch.
+import cv2
+
+def _stretch8(img):
+    finite = img[np.isfinite(img)]
+    if finite.size == 0:
+        return np.zeros(img.shape, np.uint8)
+    lo, hi = np.percentile(finite, [1, 99])
+    return (np.clip((img - lo) / max(hi - lo, 1e-6), 0, 1) * 255).astype(np.uint8)
+
+def _local_contrast(img, k=31):
+    x = img.astype(np.float32)
+    mu = cv2.blur(x, (k, k))
+    sd = np.sqrt(np.maximum(cv2.blur(x * x, (k, k)) - mu * mu, 1e-6))
+    return _stretch8((x - mu) / sd)
+
+_found = sorted(Path("/kaggle/input").rglob("kaguya_morning.png"))
+REAL_PAIR = None
+if _found:
+    _d = _found[0].parent
+    _a = _local_contrast(cv2.imread(str(_d / "kaguya_morning.png"), cv2.IMREAD_UNCHANGED))
+    _b = _local_contrast(cv2.imread(str(_d / "kaguya_evening.png"), cv2.IMREAD_UNCHANGED))
+    REAL_PAIR = (torch.from_numpy(_a.astype(np.float32) / 255.)[None, None],
+                 torch.from_numpy(_b.astype(np.float32) / 255.)[None, None])
+    print(f"real-pair guard armed, {_a.shape} from {_d}")
+else:
+    print("WARNING: kaguya_morning.png not found. The real-pair guard is DISABLED "
+          "and selection falls back to the warped metric, which is exactly what "
+          "failed on 2026-09-09. Add samples/ to the dataset.")
+
+def real_matches():
+    \"\"\"Matches on the genuine cross-illumination pair. Higher is better.\"\"\"
+    if REAL_PAIR is None:
+        return float("nan")
+    with torch.inference_mode():
+        out = model({"image0": REAL_PAIR[0].to(DEVICE),
+                     "image1": REAL_PAIR[1].to(DEVICE)})
+    return int((out["confidence"] >= 0.5).sum().item())
+"""
+
 TRAIN = """\
 EPOCHS = 8
-LR = 1e-4
+# 1e-4 destroyed real-pair matching in the 2026-09-09 run (OHRC 1443 -> 6) with
+# the backbone ALREADY frozen -- so the step size itself was the fault, not which
+# parameters were free to move. See BUGS.md BUG-017.
+LR = 2e-5
 opt = torch.optim.AdamW(trainable, lr=LR, weight_decay=1e-4)
 sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=EPOCHS)
 
@@ -286,7 +344,9 @@ def run_split(files, train: bool):
 # Baseline BEFORE any training, on the held-out tile. Without this the training
 # curve has nothing to be compared against.
 base_loss, base_prec = run_split(val_files, train=False)
-print(f"baseline (pretrained)   val loss {base_loss:.4f}  coarse precision {base_prec:.3f}")
+base_real = real_matches()
+print(f"baseline (pretrained)   val loss {base_loss:.4f}  coarse precision {base_prec:.3f}"
+      f"  real-pair matches {base_real}")
 
 history = []
 best = base_prec
@@ -295,15 +355,23 @@ for ep in range(1, EPOCHS + 1):
     tr_loss, tr_prec = run_split(train_files, train=True)
     va_loss, va_prec = run_split(val_files, train=False)
     sched.step()
+    rm = real_matches()
     history.append(dict(epoch=ep, train_loss=tr_loss, train_prec=tr_prec,
-                        val_loss=va_loss, val_prec=va_prec))
+                        val_loss=va_loss, val_prec=va_prec, real_matches=rm))
+
+    # Two conditions, not one. The warped metric says the model learned the
+    # task; the real-pair count says it did not forget how to match the Moon.
+    # Last run the first rose for 8 straight epochs while the second collapsed.
+    held = np.isnan(rm) or rm >= 0.8 * base_real
     flag = ""
-    if va_prec > best:
+    if va_prec > best and held:
         best = va_prec
         torch.save(model.state_dict(), "loftr_lunar_best.pt")
         flag = "  <- saved"
+    elif va_prec > best:
+        flag = f"  REJECTED: real matches {rm} < 80% of {base_real}"
     print(f"epoch {ep:>2}  train {tr_loss:.4f}/{tr_prec:.3f}  "
-          f"val {va_loss:.4f}/{va_prec:.3f}  {time.time()-t0:.0f}s{flag}")
+          f"val {va_loss:.4f}/{va_prec:.3f}  real {rm}  {time.time()-t0:.0f}s{flag}")
 
 print(f"\\nbaseline coarse precision {base_prec:.3f} -> best {best:.3f}"
       f"  ({(best-base_prec)*100:+.1f} points)")
@@ -313,6 +381,7 @@ if best <= base_prec:
 
 EXPORT = """\
 json.dump({"baseline_val_precision": base_prec, "best_val_precision": best,
+           "baseline_real_matches": base_real,
            "held_out_tile": val_tile, "epochs": EPOCHS, "lr": LR,
            "history": history},
           open("finetune_report.json", "w"), indent=2)
@@ -362,6 +431,7 @@ def build():
         cell("code", GT),
         cell("code", LOSS),
         cell("code", MODEL),
+        cell("code", REAL_GUARD),
         cell("code", TRAIN),
         cell("code", EXPORT),
         cell("markdown", MD_NEXT),

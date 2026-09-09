@@ -205,3 +205,33 @@ def test_rmse_is_nan_when_the_fit_is_not_over_determined():
     f4 = models.fit(pa, pb, kind="similarity")           # 4 pts: over-determined
     assert f4 is not None and not np.isnan(f4["rmse"])
     assert f4["rmse"] < 0.01
+
+
+@pytest.mark.data
+def test_training_windows_never_touch_evaluation_data():
+    """Training sources must be disjoint from every acceptance criterion.
+
+    The 2026-09-09 fine-tune trained on Kaguya tile N03E021N00E024SC, which
+    supplies the OHRC sample's reference image, while the other downloaded tile
+    is the Kaguya sample itself (BUGS.md BUG-017). Both are evaluation data.
+    LROC NAC files [0] and [1] are the obliquity ladder, which is the criterion
+    the fine-tune exists to move.
+    """
+    import itertools
+    from pathlib import Path
+    from sandhi import training
+
+    root = Path(__file__).resolve().parent.parent
+    if not (root / "data" / "raw" / "nac").exists():
+        pytest.skip("raw imagery not present")
+
+    names = {n for n, _, _, _ in itertools.islice(training.safe_windows(), 12)}
+    assert names, "safe_windows yielded nothing"
+    for n in names:
+        assert n.startswith(("tmc2", "nac-")), f"unexpected training source {n}"
+        assert "N18E009" not in n and "N03E021" not in n, f"Kaguya eval tile in {n}"
+        assert "ohrc" not in n.lower(), f"OHRC is eval-only, got {n}"
+
+    ladder = sorted((root / "data" / "raw" / "nac").glob("*.IMG"))[:2]
+    for f in ladder:
+        assert not any(f.stem in n for n in names), f"ladder image {f.stem} used for training"

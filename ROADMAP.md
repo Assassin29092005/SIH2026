@@ -110,13 +110,16 @@ Each of these cost real time. They are listed so nobody spends that time again.
 The 2026-09-09 run is above under *Deliberately not planned* — the configuration
 is dead, the direction is not. Three changes, in order of expected effect:
 
-1. **More tiles.** Training on one tile is the dominant fault. Kaguya TC has
-   7,200 tiles on the same grid; `python scripts/kaguya.py fetch --site <name>`
-   pulls a triple at ~906 MB. Eight to ten mid-latitude tiles, held out by tile,
-   is a real split.
-2. **Lower the learning rate and freeze the backbone.** 1e-4 across all
-   parameters is a retrain, not a fine-tune. Freeze the CNN backbone, train the
-   coarse transformer at 1e-5, and the pretrained features survive.
+1. **More terrain, from sources evaluation does not touch.** Training on one
+   tile is the dominant fault — and that tile was evaluation data (BUG-017).
+   No download is needed: TMC-2 ortho carries 3.55 Gpx and LROC NAC files `[2:]`
+   another 1.06 Gpx, neither used by any acceptance criterion. That is 4.6 Gpx
+   across two sensors against 0.026 Gpx of one tile. `sandhi.training.safe_windows()`
+   encodes the eligibility rules.
+2. **Lower the learning rate.** The CNN backbone was *already* frozen in the
+   failed run — only the coarse transformer moved — so the step size itself was
+   the fault, not which parameters were free. 1e-4 on the transformer for 8
+   epochs was enough to lose general matching. Now 2e-5.
 3. **Select on real pairs, not on the warped validation split.** The warped
    metric rose while the real one fell, so it cannot be the checkpoint
    criterion. Score each epoch with `scripts/adopt_check.py` and keep the
