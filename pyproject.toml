@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sandhi"
+version = "0.1.0"
+description = "Sun-angle and scale invariant lunar image registration for Chandrayaan-2 imagery"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=2.0",
+    "scipy>=1.14",
+    "opencv-python>=4.10",
+    "rasterio>=1.4",
+    "pyproj>=3.7",
+    "torch>=2.5",
+    "kornia>=0.7",
+    "matplotlib>=3.9",
+    "requests>=2.32",
+    "tqdm>=4.66",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+data = ["spiceypy>=8.0", "pyshp>=2.3"]
+
+[project.scripts]
+sandhi = "sandhi.cli:main"
+
+[tool.setuptools]
+packages = ["sandhi"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: needs the bundled samples and runs the matcher (tens of seconds)",
+    "data: needs the full ~7 GB archives under data/raw",
+]
+addopts = "-q --strict-markers"

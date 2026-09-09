@@ -44,3 +44,9 @@ data/raw/nac/
 # demo figures ARE committed: a fresh clone should show results
 # before any imagery is downloaded
 !outputs/
+
+# editable install / build artefacts
+*.egg-info/
+build/
+dist/
+.pytest_cache/

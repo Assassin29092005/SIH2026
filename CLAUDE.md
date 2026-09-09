@@ -1,6 +1,8 @@
 # CLAUDE.md
 
-Project instructions. Read fully before touching code.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+Read fully before touching code.
 
 ## What this is
 
@@ -147,9 +149,120 @@ Baselines to beat: SIFT, ASIFT, phase correlation, off-the-shelf SuperPoint+Ligh
 - Validation is cross-window agreement on the recovered offset, not agreement with an assumed ground truth. Kaguya morning and evening are genuinely offset by 8.25 px; identity correspondence is false.
 - Never report a metric without saying which data split produced it.
 
-## Running it
+## Commands
 
-`python scripts/demo.py --case all` is the end-to-end entry point. It falls back to `samples/` (3 MB of real cropped imagery, committed) when the full products are absent, so it works from a fresh clone. ~20 s per case on CPU.
+Two surfaces, and they are not interchangeable:
+
+* **`sandhi/`** — the installable package. This is the pipeline, and what new work should use.
+* **`scripts/`** — the measurement record: how every number in the README was obtained. Kept reproducible, not refactored. Not a package, so those must be run from `D:\SIH`.
+
+```bash
+pip install -e ".[dev]"              # editable install + pytest
+python scripts/check_env.py          # deps + GDAL PDS4/ISIS3/PDS drivers + SIFT. Run first on a new machine.
+```
+
+### The package
+
+```bash
+sandhi register --source A.tif --reference B.tif --out results/ --gsd 7.403
+sandhi controls --case ohrc          # the four-control gate on a bundled sample
+sandhi demo --case all
+sandhi survey --site equatorial
+```
+
+`register` writes three files: the registered product (**GeoTIFF** when the reference carries a CRS, PNG otherwise), a match-point CSV, and a metrics JSON. Config is overridable per-run (`--ransac-px`, `--tiles`, `--contrast-kernel`) or in `sandhi/config.py`, where every constant carries the measurement that chose it.
+
+### Tests
+
+```bash
+pytest                     # all 28
+pytest -m "not slow"       # 19 unit tests, ~3 s, no imagery or network
+pytest -m slow             # 9 end-to-end on samples/, minutes (runs LoFTR on CPU)
+pytest tests/test_pipeline.py::test_control_gate_passes
+```
+
+**`test_control_gate_passes` and `test_gate_rejects_a_matcher_that_ignores_its_input` are the load-bearing tests.** The first runs the four-control gate on both bundled cases; the second feeds the gate a matcher that returns a fixed correspondence while ignoring its inputs, and asserts the gate rejects it. If that ever passes, the gate is broken and every number downstream is unverified.
+
+**End-to-end demo** — the entry point. Falls back to `samples/` (3 MB of committed real imagery) when the full products are absent, so it works from a fresh clone. ~20 s per case on CPU.
+
+```bash
+python scripts/demo.py --case all    # writes outputs/demo_{kaguya,ohrc}.{png,json}
+python scripts/demo.py --list        # whether each case will use full data or the sample
+```
+
+**Self-checks — this project's substitute for a test suite.** Each is a real assertion, not a smoke test; several need downloaded data and take minutes. To "run a single test", run one script:
+
+| Command | Asserts | Needs data |
+|---|---|---|
+| `python scripts/check_env.py` | imports, GDAL drivers, SIFT constructs | no |
+| `python scripts/photometric.py` | 7 analytic checks: shading, both azimuth axes, shadow side/length, crater-dome ambiguity, latitude spacing | no |
+| `python scripts/triple_io.py` | Kaguya triple opens, windows align, pair differs but correlates | Kaguya |
+| `python scripts/ch2_io.py` | OHRC + TMC-2 read in place via `/vsizip/`, ortho/DEM aligned | CH-2 |
+| `python scripts/survey_coverage.py --self-check` | ODE incidence filter actually bites (BUG-002 guard) | network |
+| `python scripts/register.py --self-check` | best variant reaches RMSE < 1.0 px | Kaguya |
+| `python scripts/viewpoint.py --self-check` | selector does not over-pick homography on nadir pairs | Kaguya |
+| `python scripts/ohrc_project.py` | OHRC geolocation polynomial fit residual < 5 px | CH-2 |
+
+**Measurement and evaluation**
+
+```bash
+python scripts/remeasure.py --full             # control-gated method comparison (authoritative)
+python scripts/remeasure.py --scale --size 1024
+python scripts/viewpoint.py --ladder           # obliquity envelope, 1.2 to 58.9 deg
+python scripts/ohrc_vs_kaguya.py --rows 512    # real Chandrayaan-2 registration
+python scripts/register.py --out-dir data/interim/registered   # writes the deliverable
+```
+
+**Data acquisition**
+
+```bash
+python scripts/survey_coverage.py --site equatorial     # what exists where; --bbox W E S N also works
+python scripts/ode_catalog.py --all --grep TC           # what ODE indexes
+python scripts/kaguya.py labels --site equatorial       # ~12 KB, validates a triple before committing to 906 MB
+python scripts/kaguya.py fetch  --site equatorial       # morning + evening + DEM
+python scripts/ch2_footprints.py --summary              # where OHRC/TMC-2 actually point
+python scripts/ch2_footprints.py --pick tmc --at-lat 0  # rank candidates before downloading
+python scripts/ohrc_project.py --gsd 7.403 --out data/interim/ohrc_7m.tif
+```
+
+## Architecture
+
+### Data flow
+
+`kaguya.py` / `ch2_io.py` / `ohrc_project.py` (ingest) → `triple_io.py` (aligned windows) → `remeasure.build_raw_hp` (normalise) → `register.py` (match, refine, fit, write) → `demo.py` (render).
+
+Chandrayaan-2 archives are read **in place through GDAL `/vsizip/`** — never extracted. `data/raw/` holds ~7 GB (ch2 2.1 GB, kaguya 1.7 GB, nac 3.0 GB) and is gitignored; `samples/` (3 MB) and `outputs/` (1.4 MB) are committed.
+
+### Package vs scripts
+
+`sandhi/` owns clean implementations of everything on the live path and imports **nothing** from `scripts/`. That is deliberate: it retires the trap below for new work. `scripts/` stays as the measurement record — how each README number was obtained — and is not refactored.
+
+`sandhi/` layout: `config` (tuned constants + provenance) · `normalize` (local contrast) · `matching` (LoFTR, tiling, coarse offset) · `refine` (sub-pixel) · `models` (fit + held-out selection) · `metrics` · `controls` (the gate) · `pipeline` (`register()`) · `outputs` (GeoTIFF/CSV/JSON) · `cli`.
+
+**Model selection is on by default in the package and was not in `scripts/register.py`.** On OHRC it selects `affine` over `similarity` (held-out median 0.447 vs 1.422, a 69% gain) and improves RMSE 0.752 → 0.513 px with inliers 51% → 99%. A polynomial-projected pushbroom strip leaves shear and anisotropic scale, which similarity cannot represent; homography scores −6% against affine, so the selector correctly stops. Pass `select_model=False` to reproduce the older numbers exactly.
+
+### Module roles (scripts/)
+
+| Module | Role |
+|---|---|
+| `register.py` | **The pipeline.** `register_pair()` is the single entry: coarse align → tiled LoFTR → sub-pixel refine → RANSAC → outputs. Production constants (`RANSAC_PX=1.5`, `TILES=8`, `TILE_PAD=16`) are documented in-file with the measurements that chose them. |
+| `remeasure.py` | **The authoritative evaluation harness.** Owns the four-control gate and `build_raw_hp` (the normalisation the whole pipeline uses). No method is reported unless it passes. |
+| `viewpoint.py` | Transform-model selection on held-out residual; obliquity ladder. |
+| `photometric.py` | DEM renderer. Retained as a physics result and illumination-recovery tool — **not** used for matching. |
+| `triple_io.py`, `ch2_io.py` | Readers. `pixel_latlon()` exists because the transform is in projected metres, not degrees (BUG-006). |
+| `demo.py` | The only thing that renders. Everything else prints numbers. |
+
+### Two traps
+
+**1. The superseded modules are still imported.** `ablation.py`, `dense_match.py` and `scale_pipeline.py` carry SUPERSEDED banners because their *results* were retracted (BUG-011), but current code imports their *helpers*:
+
+- `register.py` ← `dense_match.LOFTR_CONF`, `loftr_model`
+- `remeasure.py` ← `ablation.best_azimuth_at`, `match_sift`, `match_uniformity`; `dense_match.match_loftr`; `scale_test.decimate`
+- `ohrc_vs_kaguya.py` ← `ablation.match_uniformity`, `dense_match.match_loftr`
+
+Deleting them breaks the pipeline. Do not cite their output; do not remove the files. If they are ever cleaned up, move those helpers first.
+
+**2. `scripts/` is flat, not a package.** Modules import by bare name (`from register import ...`), so anything run outside the repo root fails on import. `demo.py` and `register.py` therefore both define `ROOT = Path(__file__).resolve().parent.parent`.
 
 Forward work is listed in `ROADMAP.md`, including three approaches that were tested and abandoned (Stage B, blind scale estimation, bucketed selection). Read that before reviving any of them.
 
