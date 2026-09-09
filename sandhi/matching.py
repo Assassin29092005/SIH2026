@@ -23,14 +23,26 @@ import torch
 from . import config
 
 _MODEL = None
+_MODEL_KEY = object()          # which weights the cached model holds
 
 
 def loftr_model():
-    """Lazily construct LoFTR. Downloads ~44 MB of weights on first use."""
-    global _MODEL
-    if _MODEL is None:
+    """Lazily construct LoFTR. Downloads ~44 MB of weights on first use.
+
+    `config.weights` swaps in a fine-tuned checkpoint. The cache is keyed on that
+    path, so switching weights inside one process rebuilds the model instead of
+    silently returning the previous one — which would make an A/B comparison
+    report the same numbers twice.
+    """
+    global _MODEL, _MODEL_KEY
+    path = config.get().weights
+    if _MODEL is None or _MODEL_KEY != path:
         from kornia.feature import LoFTR
-        _MODEL = LoFTR(pretrained="outdoor").eval()
+        model = LoFTR(pretrained="outdoor")
+        if path:
+            state = torch.load(path, map_location="cpu", weights_only=True)
+            model.load_state_dict(state.get("state_dict", state))
+        _MODEL, _MODEL_KEY = model.eval(), path
     return _MODEL
 
 

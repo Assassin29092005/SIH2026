@@ -99,8 +99,32 @@ README serves developers and reviewers simultaneously. Real software separates a
 - **Stage B / DEM-based photometric normalisation.** Tested, failed its controls, documented in BUGS.md BUG-011. Do not revive it without new evidence.
 - **Blind scale estimation.** Confounded (BUG-010), and unnecessary since every product declares its GSD.
 - **Bucketed match selection.** Implemented, measured, cannot raise coverage. The fix was tiled matching.
+- **LoFTR fine-tuned on warped Kaguya crops, as run on 2026-09-09.** Not the idea — *that* run. It improved its own validation metric 4.5x (coarse-cell precision 0.087 -> 0.391 on a held-out tile) and destroyed real-pair matching: Kaguya 132 -> 47 matches, OHRC **1443 -> 6**. The control gate still passed, which is the point — the gate detects fabricated matches, not a model that has simply become worse. Diagnosis: the split holds out one of only two downloaded tiles, so training saw **48 warped crops of a single 3x3 degree patch**, and 8 epochs at lr 1e-4 was enough to overwrite the general MegaDepth features the cross-sensor OHRC case depends on. Do not re-run it in that configuration. See "Fine-tuning, next attempt" below.
 
 Each of these cost real time. They are listed so nobody spends that time again.
+
+---
+
+## Fine-tuning, next attempt
+
+The 2026-09-09 run is above under *Deliberately not planned* — the configuration
+is dead, the direction is not. Three changes, in order of expected effect:
+
+1. **More tiles.** Training on one tile is the dominant fault. Kaguya TC has
+   7,200 tiles on the same grid; `python scripts/kaguya.py fetch --site <name>`
+   pulls a triple at ~906 MB. Eight to ten mid-latitude tiles, held out by tile,
+   is a real split.
+2. **Lower the learning rate and freeze the backbone.** 1e-4 across all
+   parameters is a retrain, not a fine-tune. Freeze the CNN backbone, train the
+   coarse transformer at 1e-5, and the pretrained features survive.
+3. **Select on real pairs, not on the warped validation split.** The warped
+   metric rose while the real one fell, so it cannot be the checkpoint
+   criterion. Score each epoch with `scripts/adopt_check.py` and keep the
+   checkpoint that wins there.
+
+Until then the pretrained `outdoor` weights remain the default in
+`sandhi/config.py`, and `--weights` exists purely so the comparison stays one
+flag away.
 
 ---
 

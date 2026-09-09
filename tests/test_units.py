@@ -186,3 +186,22 @@ def test_to_common_gsd_noop_when_equal():
     a = np.zeros((64, 64), np.float32)
     s, r, k = to_common_gsd(a, a, 7.403, 7.403)
     assert k == 1.0 and s.shape == r.shape == (64, 64)
+
+
+def test_rmse_is_nan_when_the_fit_is_not_over_determined():
+    """A model passing exactly through its inliers has RMSE 0 by construction.
+
+    A fine-tune that collapsed OHRC to 6 matches (2 inliers on a 4-DOF
+    similarity) reported 0.0000 px — the best RMSE in the project, from its
+    worst fit. Degenerate fits must report NaN, not a flattering number.
+    See BUGS.md BUG-016.
+    """
+    pa = np.array([[0.0, 0.0], [100.0, 0.0], [0.0, 100.0], [100.0, 100.0]])
+    pb = pa + np.array([3.0, -2.0])
+
+    f2 = models.fit(pa[:2], pb[:2], kind="similarity")   # 2 pts, 4 DOF: exactly determined
+    assert f2 is None or np.isnan(f2["rmse"])
+
+    f4 = models.fit(pa, pb, kind="similarity")           # 4 pts: over-determined
+    assert f4 is not None and not np.isnan(f4["rmse"])
+    assert f4["rmse"] < 0.01

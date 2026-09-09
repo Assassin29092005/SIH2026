@@ -72,7 +72,16 @@ def fit(pa: np.ndarray, pb: np.ndarray, kind: str = "similarity",
         return None
     m, inl = got
     resid = residual(kind, m, pa, pb)
-    rmse = float(np.sqrt((resid[inl] ** 2).mean())) if inl.any() else float("nan")
+
+    # RMSE is only meaningful once the inliers over-determine the model. Each
+    # point contributes two equations, so `2 * n_inliers > dof` is the threshold.
+    # At or below it the model passes exactly through the points and RMSE is 0
+    # by construction, not by accuracy -- a fine-tune that collapsed OHRC to 6
+    # matches (2 inliers, 4-DOF similarity) reported 0.0000 px, the best number
+    # in the project, from the worst fit in it. See BUGS.md BUG-016.
+    over_determined = 2 * int(inl.sum()) > MODELS[kind]
+    rmse = (float(np.sqrt((resid[inl] ** 2).mean()))
+            if inl.any() and over_determined else float("nan"))
     return {"kind": kind, "model": m, "inliers": inl, "resid": resid, "rmse": rmse}
 
 

@@ -1,0 +1,69 @@
+{
+  "weights": "data/interim/loftr_lunar_best.pt",
+  "cases": {
+    "kaguya": {
+      "pretrained": {
+        "registered": true,
+        "match_count": 132,
+        "inlier_ratio": 0.4924,
+        "rmse_px": 0.7962,
+        "coverage": 0.3438,
+        "entropy": 0.6302,
+        "model_kind": "similarity"
+      },
+      "finetuned": {
+        "registered": true,
+        "match_count": 47,
+        "inlier_ratio": 0.5106,
+        "rmse_px": 0.912,
+        "coverage": 0.2344,
+        "entropy": 0.6148,
+        "model_kind": "homography"
+      }
+    },
+    "ohrc": {
+      "pretrained": {
+        "registered": true,
+        "match_count": 1443,
+        "inlier_ratio": 0.9889,
+        "rmse_px": 0.5134,
+        "coverage": 0.3906,
+        "entropy": 0.7306,
+        "model_kind": "affine"
+      },
+      "finetuned": {
+        "registered": true,
+        "match_count": 6,
+        "inlier_ratio": 0.3333,
+        "rmse_px": 0.0,
+        "coverage": 0.0312,
+        "entropy": 0.1667,
+        "model_kind": "similarity"
+      }
+    }
+  },
+  "gate": {
+    "kaguya": {
+      "passed": true,
+      "checks": {
+        "real pair": true,
+        "roll +15 raw": true,
+        "noise": true,
+        "constant": true
+      }
+    },
+    "ohrc": {
+      "passed": true,
+      "checks": {
+        "real pair": true,
+        "roll +15 raw": true,
+        "noise": true,
+        "constant": true
+      }
+    }
+  },
+  "blocking": [
+    "kaguya: matches collapsed 132 -> 47",
+    "ohrc: matches collapsed 1443 -> 6"
+  ]
+}

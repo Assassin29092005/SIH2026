@@ -71,6 +71,14 @@ class Config:
     control_roll_px: int = 15
     min_matches: int = 8
 
+    # -- weights -----------------------------------------------------------
+    # None means the public MegaDepth `outdoor` weights, which have never seen
+    # lunar imagery. A path here swaps in a fine-tune. Weights are NOT adopted
+    # by default: a fine-tune has to beat the pretrained model on the control
+    # gate, the obliquity ladder AND the illumination cases before this default
+    # changes, so the comparison is always available by flipping one flag.
+    weights: str | None = None
+
 
 DEFAULT = Config()
 _active = DEFAULT

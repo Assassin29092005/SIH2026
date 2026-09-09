@@ -35,6 +35,16 @@ Rules for writing entries:
 
 ## Log
 
+### BUG-016 — a degenerate 2-inlier fit reported RMSE 0.0000 px, the best number in the project
+
+- **Date:** 2026-09-09
+- **Status:** FIXED
+- **Area:** eval
+- **Symptom:** The adoption check for the fine-tuned weights printed `ohrc  rmse_px 0.5134 -> 0.0000  better` while every other metric on that case collapsed: match count 1443 -> 6, inlier ratio 0.9889 -> 0.3333, coverage 0.3906 -> 0.0312. The worst fit in the project produced its best accuracy number.
+- **Root cause:** `models.fit()` computed RMSE over the inliers unconditionally. With 6 matches at inlier ratio 0.333 there were 2 inliers, and a similarity has 4 degrees of freedom. Two points supply four equations, so the model passes *exactly* through them: the residual is zero by construction, not by accuracy. RMSE only measures anything once the inliers over-determine the model. Left unguarded, this is a metric that improves as the matcher gets worse — the same failure shape as BUG-011, where an artifact scored perfectly.
+- **Fix:** `sandhi/models.py:75` — RMSE is `nan` unless `2 * n_inliers > MODELS[kind]` (each point contributes two equations). `metrics.summarise` was already NaN-safe for the `sub_pixel` flag, so a degenerate fit now reports "not sub-pixel" rather than a flattering zero.
+- **Check:** `tests/test_units.py::test_rmse_is_nan_when_the_fit_is_not_over_determined` — fits a 4-DOF similarity to 2 points and asserts NaN, then to 4 points and asserts a real sub-0.01 px value.
+
 ### BUG-015 — CUDA "no kernel image is available for execution on the device" on the first LoFTR forward pass
 
 - **Date:** 2026-09-09

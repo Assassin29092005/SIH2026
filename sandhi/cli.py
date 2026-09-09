@@ -133,6 +133,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--contrast-kernel", type=int)
     p.add_argument("--ransac-px", type=float)
     p.add_argument("--tiles", type=int)
+    p.add_argument("--weights", help="fine-tuned LoFTR checkpoint; "
+                                     "omit for the pretrained outdoor weights")
     sub = p.add_subparsers(dest="command", required=True)
 
     r = sub.add_parser("register", help="register a source image onto a reference")
@@ -170,7 +172,8 @@ def main(argv=None) -> int:
     overrides = {k: v for k, v in (
         ("contrast_kernel", args.contrast_kernel),
         ("ransac_px", args.ransac_px),
-        ("tiles", args.tiles)) if v is not None}
+        ("tiles", args.tiles),
+        ("weights", args.weights)) if v is not None}
     if overrides:
         config.settings(**overrides)
     return args.func(args)
