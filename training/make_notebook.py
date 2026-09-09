@@ -76,12 +76,36 @@ from kornia.feature import LoFTR
 """
 
 DATA = """\
-# Upload `data/interim/trainset` as a Kaggle dataset and point PAIR_DIR at it.
-PAIR_DIR = Path("/kaggle/input/sandhi-trainset/pairs")
-if not PAIR_DIR.exists():
-    PAIR_DIR = Path("pairs")           # local fallback
-files = sorted(PAIR_DIR.glob("*.npz"))
-print(f"{len(files)} training pairs")
+# Locate the attached dataset by SEARCHING, not by assuming a mount path. The
+# path depends on the dataset slug, and Kaggle may or may not have extracted the
+# uploaded archive. Guessing wrong printed "0 training pairs" and then raised an
+# IndexError three lines later, which reads as a code bug rather than a missing
+# input (BUGS.md BUG-014).
+import zipfile
+
+def find_pairs():
+    roots = [Path("/kaggle/input"), Path(".")]
+    for root in roots:
+        if root.exists():
+            hits = sorted(root.rglob("*.npz"))
+            if hits:
+                return hits
+    for root in roots:                      # nothing loose: unpack an archive once
+        for z in (sorted(root.rglob("*.zip")) if root.exists() else []):
+            with zipfile.ZipFile(z) as zf:
+                if any(n.endswith(".npz") for n in zf.namelist()):
+                    zf.extractall("/kaggle/working/trainset")
+                    return sorted(Path("/kaggle/working/trainset").rglob("*.npz"))
+    return []
+
+files = find_pairs()
+if not files:
+    seen = sorted(str(p) for p in Path("/kaggle/input").rglob("*")) \\
+           if Path("/kaggle/input").exists() else ["/kaggle/input does not exist"]
+    raise SystemExit("No .npz pairs found. Attach the sandhi-trainset dataset via "
+                     "'+ Add Input' (right panel), then re-run.\\n/kaggle/input holds:\\n  "
+                     + "\\n  ".join(seen[:40]))
+print(f"{len(files)} training pairs under {files[0].parent}")
 
 # Hold out a whole TILE, not random pairs. Pairs from one tile share terrain, so
 # a random split would leak the same ground into train and validation and the
@@ -91,6 +115,7 @@ def tile_of(p):
 
 tiles = sorted({tile_of(f) for f in files})
 print("tiles:", tiles)
+assert len(tiles) >= 2, f"need >=2 tiles to hold one out, got {tiles}"
 val_tile = tiles[-1]
 train_files = [f for f in files if tile_of(f) != val_tile]
 val_files   = [f for f in files if tile_of(f) == val_tile]

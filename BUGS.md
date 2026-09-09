@@ -35,6 +35,16 @@ Rules for writing entries:
 
 ## Log
 
+### BUG-014 — Kaggle notebook reported "0 training pairs" with the dataset correctly attached
+
+- **Date:** 2026-09-09
+- **Status:** FIXED
+- **Area:** env
+- **Symptom:** With `sandhi-trainset` attached under Input in the Kaggle editor, the data cell printed `0 training pairs` / `tiles: []` and then died three lines later on `IndexError: list index out of range` at `val_tile = tiles[-1]`. The traceback points at the tile-split code, which is correct and not the problem.
+- **Root cause:** The cell hard-coded `PAIR_DIR = Path("/kaggle/input/sandhi-trainset/pairs")`. That path is a guess about two things the notebook does not control: the slug Kaggle derives from the dataset title, and whether Kaggle extracted the uploaded archive or left it as a `.zip`. When the guess missed, the `if not PAIR_DIR.exists()` fallback silently switched to a local `pairs/` that also does not exist on Kaggle, so `glob` returned an empty list instead of raising. A missing input was laundered into an empty input, and the first code that could not tolerate empty got the blame.
+- **Fix:** `training/make_notebook.py:78` — replaced the hard-coded path with `find_pairs()`, which `rglob`s `/kaggle/input` (then `.`) for `*.npz`, and if it finds none, unpacks the first `.zip` containing `.npz` into `/kaggle/working/trainset`. If still empty it raises `SystemExit` naming the fix ("+ Add Input") and printing what `/kaggle/input` actually holds. Added `assert len(tiles) >= 2` before the held-out split so a one-tile dataset also fails on its real cause.
+- **Check:** `python training/make_notebook.py`, then exec the generated cell's `find_pairs` against (a) a directory of loose `.npz` and (b) a directory holding only `sandhi-trainset.zip`. Both must return the pairs; the zip branch returned 96. Empty input must raise `SystemExit`, never reach the tile split.
+
 ### BUG-013 — LoFTR in train() mode raises KeyError: 'spv_b_ids'
 
 - **Date:** 2026-09-09
