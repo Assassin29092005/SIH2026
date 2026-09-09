@@ -170,6 +170,44 @@ This gate exists because it caught a catastrophic error: an earlier version of t
 
 **No identity ground truth is used anywhere.** Kaguya morning and evening are independently orthorectified and genuinely offset. Validation is cross-window agreement on the recovered offset — which an artifact cannot fake, because a mask artifact reports zero everywhere and noise reports scatter.
 
+## Fine-tuning: measured twice, rejected twice
+
+The pretrained MegaDepth `outdoor` weights are the default, and that is a
+finding rather than an omission. Fine-tuning LoFTR on warped lunar crops was
+attempted twice and rejected twice, by a bar written before either run.
+
+| | Run 1 (2026-09-09) | Run 2 (2026-09-10) |
+|---|---|---|
+| Training pairs | 48 crops, 1 tile | 1251 pairs, 5 scenes, 2 sensors |
+| Source terrain | 0.026 Gpx | 4.6 Gpx |
+| Overlaps evaluation data | yes — a real contamination bug | no, asserted by a test |
+| Learning rate | 1e-4 | 2e-5 |
+| Its own validation metric | 0.087 → 0.391 | 0.109 → **0.575** |
+| **Matches on the real pair** | **132 → 47** | **245 → 63, by epoch 1** |
+| Checkpoint adopted | no | **none was ever saved** |
+
+Run 2 improved its training metric **5.3×** while losing **74% of real matches
+in a single epoch**. A per-epoch guard scoring the model on genuine
+cross-illumination imagery rejected all four epochs, so no checkpoint was
+written — the file on disk stayed byte-identical to run 1's rejected weights,
+which is how we know rather than assume.
+
+**Why, and why more data cannot fix it.** A training pair is an image and a
+warped copy of *itself*: photometrically identical. The cheapest solution to
+that task is exact appearance correspondence — precisely the crutch a matcher
+must give up to survive a lunar illumination change, where a crater lit from the
+east is close to pixel-identical to a dome lit from the west. The task does not
+merely fail to teach illumination invariance, it rewards unlearning it. That
+predicts an immediate collapse on the cross-illumination pair specifically,
+which is what was measured, twice.
+
+A real attempt needs pairs varying illumination *and* viewpoint with
+correspondence that is neither warped nor estimated — multi-look NAC with SPICE
+geometry. See [ROADMAP.md](ROADMAP.md).
+
+`sandhi register --weights <checkpoint>` and `scripts/adopt_check.py` remain, so
+the comparison stays one flag away and the bar is already encoded.
+
 ## Data
 
 Real, public, current. No synthetic imagery; no ground truth manufactured by warping.
@@ -266,7 +304,7 @@ python scripts/ohrc_vs_kaguya.py --rows 512
 
 The morning/evening asymmetry is now partly explained: OHRC correlates +0.066 with Kaguya evening and −0.031 with morning, consistent with its illumination resembling evening. Both are weak. The more important finding is that a DEM render explains OHRC barely at all (r = +0.006, against +0.067 for Kaguya on the same terrain) — **at 0.26 m, OHRC resolves texture that a 10 m DTM cannot model**, so DEM-based illumination reasoning cannot bridge a 28× resolution gap.
 
-**Does not work:** Stage B for matching. 16× scale. SIFT at any ratio (53 px scatter).
+**Does not work:** Stage B for matching. 16× scale. SIFT at any ratio (53 px scatter). Fine-tuning LoFTR on warped pairs — twice measured, twice rejected, and the second run's collapse arrived within one epoch.
 
 **Known limits:** LoFTR capped near 1024×1024 on CPU, which is what bounds scale at 8× rather than anything about the method. Obliquity beyond ~13° is not matchable, and the ladder that measured it confounds obliquity with illumination change. Matching takes tens of seconds per pair on CPU; a live demo should use the committed figures or a GPU. Whether the 3.4 km offset reflects Chandrayaan-2 geolocation error or residual error in our own projection is not separated — both would produce this signature.
 
@@ -275,7 +313,7 @@ The morning/evening asymmetry is now partly explained: OHRC correlates +0.066 wi
 See [ROADMAP.md](ROADMAP.md). The two items that matter most are not features:
 
 1. **Separating Chandrayaan-2 geolocation error from error in our own projection.** The measured 3.4 km offset has two possible causes and we cannot yet distinguish them. Until then it is "the offset between our projected OHRC and the Kaguya frame", not Chandrayaan-2's geolocation error.
-2. **Making the four-part control gate a CI test rather than a script.** It is what caught BUG-011, and it should be able to fail a build.
+2. **Wiring the control gate into CI.** It is now a test — `pytest tests/test_pipeline.py::test_control_gate_passes`, alongside one that feeds the gate a deliberately blind matcher and asserts it is rejected — so it can fail a build. What is left is running it on a hosted runner rather than on a laptop.
 
 The roadmap also records what was tried and abandoned — Stage B, blind scale estimation, bucketed selection — so the cost is not paid twice.
 
