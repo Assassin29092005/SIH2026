@@ -179,16 +179,77 @@ def pick(kind: str, max_lat: float, limit: int, at_lat: float = 0.0) -> int:
     return 0
 
 
+
+def pick_iirs(limit: int = 10) -> int:
+    """Rank IIRS reflectance products by overlap with Kaguya tiles ALREADY on disk.
+
+    Ranking by latitude or by footprint area, as the OHRC and TMC-2 pickers do,
+    is the wrong question for IIRS: it is a 16-35 degree long strip, so area
+    measures strip length rather than usefulness, and a product is only usable if
+    a reference image exists for the same ground. Overlap with the downloaded
+    Kaguya triples is the quantity that decides whether it can be registered at
+    all, and it costs nothing to compute -- unlike a ~GB download of the wrong
+    product.
+
+    Reflectance, not raw or calibrated radiance, is deliberate. IIRS spans
+    0.8-5.0 um; beyond ~3 um thermal EMISSION dominates and does not shade like
+    visible imagery, so the raw cube is cross-modal in a way that is not merely
+    cross-scale. A derived reflectance product is reflected sunlight, the same
+    physical quantity Kaguya records.
+    """
+    from triple_io import find_tiles, open_triple
+
+    tiles = {}
+    for name in find_tiles():
+        t = open_triple(name)
+        lat0, lon0 = t.pixel_latlon(0, 0)
+        lat1, lon1 = t.pixel_latlon(t.height - 1, t.width - 1)
+        tiles[name] = (min(lon0, lon1), max(lon0, lon1),
+                       min(lat0, lat1), max(lat0, lat1))
+    if not tiles:
+        print("no Kaguya tiles downloaded - nothing to register IIRS against")
+        return 1
+    print(f"Kaguya tiles on disk: {len(tiles)}")
+    for n, b in tiles.items():
+        print(f"  {n}  lon {b[0]:.2f}..{b[1]:.2f}  lat {b[2]:.2f}..{b[3]:.2f}")
+
+    cands = []
+    for rec in load("ch2_iir_derived_refl*.shp"):
+        b = bbox(rec)
+        if not b:
+            continue
+        w, e, s, n = b
+        for name, (tw, te, ts, tn) in tiles.items():
+            ow, oh = min(e, te) - max(w, tw), min(n, tn) - max(s, ts)
+            if ow > 0 and oh > 0:
+                cands.append((ow * oh, ow, oh, name, rec, b))
+    cands.sort(reverse=True, key=lambda c: c[0])
+
+    print(f"\n{len(cands)} IIRS reflectance products overlap a downloaded tile")
+    for area, ow, oh, name, rec, b in cands[:limit]:
+        print(f"\n  {rec['PRODUCT_ID']}")
+        print(f"    overlaps {name}: {ow:.3f} x {oh:.3f} deg = {area:.4f} deg^2")
+        print(f"    footprint lon {b[0]:.3f}..{b[1]:.3f}  lat {b[2]:.3f}..{b[3]:.3f}")
+        print(f"    observed  {rec['OBS_ST_TIM']}")
+        print(f"    download  {rec['DOWNLOAD']}")
+    if cands:
+        print("\n  Angles in these records are 0.0, as for TMC-2: IIRS labels carry no")
+        print("  usable illumination geometry, so it must be recovered by correlation.")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--summary", action="store_true")
-    parser.add_argument("--pick", choices=["ohrc", "tmc"])
+    parser.add_argument("--pick", choices=["ohrc", "tmc", "iirs"])
     parser.add_argument("--max-lat", type=float, default=60.0)
     parser.add_argument("--limit", type=int, default=10)
     parser.add_argument("--at-lat", type=float, default=0.0,
                         help="latitude at which to probe TMC-2 strips")
     args = parser.parse_args()
 
+    if args.pick == "iirs":
+        return pick_iirs(args.limit)
     if args.pick:
         return pick(args.pick, args.max_lat, args.limit, args.at_lat)
     return summarise()
