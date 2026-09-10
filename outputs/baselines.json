@@ -1,0 +1,259 @@
+{
+  "kaguya": {
+    "SANDHI (LoFTR + local contrast)": {
+      "matches": 536,
+      "inlier_count": 167,
+      "inlier_ratio": 0.3116,
+      "rmse_px": 0.9322,
+      "coverage": 0.6406,
+      "entropy": 0.8008,
+      "seconds": 23.0,
+      "gate": true,
+      "gate_checks": {
+        "real pair": true,
+        "roll +15 raw": true,
+        "noise": true,
+        "constant": true
+      }
+    },
+    "DISK + LightGlue": {
+      "matches": 1,
+      "inlier_ratio": null,
+      "rmse_px": null,
+      "coverage": 0.0,
+      "entropy": 0.0,
+      "seconds": 6.0,
+      "gate": false,
+      "gate_checks": {
+        "real pair": false
+      }
+    },
+    "ASIFT": {
+      "matches": 90,
+      "inlier_count": 7,
+      "inlier_ratio": 0.0778,
+      "rmse_px": 0.4472,
+      "coverage": 0.0625,
+      "entropy": 0.325,
+      "seconds": 25.1,
+      "gate": false,
+      "gate_checks": {
+        "real pair": true,
+        "roll +15 raw": false,
+        "noise": false,
+        "constant": true
+      }
+    },
+    "SIFT": {
+      "matches": 25,
+      "inlier_count": 3,
+      "inlier_ratio": 0.12,
+      "rmse_px": null,
+      "coverage": 0.0469,
+      "entropy": 0.2642,
+      "seconds": 2.7,
+      "gate": false,
+      "gate_checks": {
+        "real pair": true,
+        "roll +15 raw": false,
+        "noise": true,
+        "constant": true
+      }
+    },
+    "ORB": {
+      "matches": 83,
+      "inlier_count": 3,
+      "inlier_ratio": 0.0361,
+      "rmse_px": null,
+      "coverage": 0.0469,
+      "entropy": 0.2642,
+      "seconds": 0.5,
+      "gate": false,
+      "gate_checks": {
+        "real pair": true,
+        "roll +15 raw": true,
+        "noise": false,
+        "constant": true
+      }
+    },
+    "phase correlation (offset only)": {
+      "dx": 0.433,
+      "dy": 7.962,
+      "response": 0.2407
+    }
+  },
+  "ohrc": {
+    "SANDHI (LoFTR + local contrast)": {
+      "matches": 1622,
+      "inlier_count": 1236,
+      "inlier_ratio": 0.762,
+      "rmse_px": 0.6589,
+      "coverage": 0.375,
+      "entropy": 0.6862,
+      "seconds": 10.9,
+      "gate": true,
+      "gate_checks": {
+        "real pair": true,
+        "roll +15 raw": true,
+        "noise": true,
+        "constant": true
+      }
+    },
+    "DISK + LightGlue": {
+      "matches": 559,
+      "inlier_count": 366,
+      "inlier_ratio": 0.6547,
+      "rmse_px": 0.8007,
+      "coverage": 0.3906,
+      "entropy": 0.7111,
+      "seconds": 2.9,
+      "gate": true,
+      "gate_checks": {
+        "real pair": true,
+        "roll +15 raw": true,
+        "noise": true,
+        "constant": true
+      }
+    },
+    "ASIFT": {
+      "matches": 4826,
+      "inlier_count": 3974,
+      "inlier_ratio": 0.8235,
+      "rmse_px": 0.6685,
+      "coverage": 0.4531,
+      "entropy": 0.7517,
+      "seconds": 21.0,
+      "gate": true,
+      "gate_checks": {
+        "real pair": true,
+        "roll +15 raw": true,
+        "noise": true,
+        "constant": true
+      }
+    },
+    "SIFT": {
+      "matches": 583,
+      "inlier_count": 484,
+      "inlier_ratio": 0.8302,
+      "rmse_px": 0.6538,
+      "coverage": 0.4531,
+      "entropy": 0.7626,
+      "seconds": 0.4,
+      "gate": true,
+      "gate_checks": {
+        "real pair": true,
+        "roll +15 raw": true,
+        "noise": true,
+        "constant": true
+      }
+    },
+    "ORB": {
+      "matches": 814,
+      "inlier_count": 468,
+      "inlier_ratio": 0.5749,
+      "rmse_px": 0.8798,
+      "coverage": 0.3438,
+      "entropy": 0.6803,
+      "seconds": 0.2,
+      "gate": true,
+      "gate_checks": {
+        "real pair": true,
+        "roll +15 raw": true,
+        "noise": true,
+        "constant": true
+      }
+    },
+    "phase correlation (offset only)": {
+      "dx": 151.129,
+      "dy": -435.642,
+      "response": 0.2277
+    }
+  },
+  "tmc": {
+    "SANDHI (LoFTR + local contrast)": {
+      "matches": 3417,
+      "inlier_count": 2753,
+      "inlier_ratio": 0.8057,
+      "rmse_px": 0.7247,
+      "coverage": 0.8906,
+      "entropy": 0.8943,
+      "seconds": 31.8,
+      "gate": true,
+      "gate_checks": {
+        "real pair": true,
+        "roll +15 raw": true,
+        "noise": true,
+        "constant": true
+      }
+    },
+    "DISK + LightGlue": {
+      "matches": 665,
+      "inlier_count": 390,
+      "inlier_ratio": 0.5865,
+      "rmse_px": 0.9021,
+      "coverage": 0.7344,
+      "entropy": 0.8291,
+      "seconds": 8.7,
+      "gate": true,
+      "gate_checks": {
+        "real pair": true,
+        "roll +15 raw": true,
+        "noise": true,
+        "constant": true
+      }
+    },
+    "ASIFT": {
+      "matches": 215,
+      "inlier_count": 122,
+      "inlier_ratio": 0.5674,
+      "rmse_px": 0.6678,
+      "coverage": 0.2812,
+      "entropy": 0.5651,
+      "seconds": 25.8,
+      "gate": false,
+      "gate_checks": {
+        "real pair": true,
+        "roll +15 raw": true,
+        "noise": false,
+        "constant": true
+      }
+    },
+    "SIFT": {
+      "matches": 72,
+      "inlier_count": 44,
+      "inlier_ratio": 0.6111,
+      "rmse_px": 0.6009,
+      "coverage": 0.2812,
+      "entropy": 0.6207,
+      "seconds": 2.7,
+      "gate": true,
+      "gate_checks": {
+        "real pair": true,
+        "roll +15 raw": true,
+        "noise": true,
+        "constant": true
+      }
+    },
+    "ORB": {
+      "matches": 188,
+      "inlier_count": 52,
+      "inlier_ratio": 0.2766,
+      "rmse_px": 0.851,
+      "coverage": 0.3125,
+      "entropy": 0.6544,
+      "seconds": 0.3,
+      "gate": true,
+      "gate_checks": {
+        "real pair": true,
+        "roll +15 raw": true,
+        "noise": true,
+        "constant": true
+      }
+    },
+    "phase correlation (offset only)": {
+      "dx": 21.678,
+      "dy": 2.887,
+      "response": 0.567
+    }
+  }
+}

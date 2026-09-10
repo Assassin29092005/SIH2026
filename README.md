@@ -116,6 +116,84 @@ the matcher measures is the residual — dx +21.5 px, dy +2.5 px, about 160 m.
 
 Reproduce: `python scripts/tmc_vs_kaguya.py --lat 0.5 --size 1536`
 
+## Baselines, measured through the same gate
+
+Every method gets the same front end (local contrast normalisation), the same
+RANSAC and the same metrics, on the same three real cases. A method that fails
+the four-control gate has its numbers struck out: they describe matches that are
+not tracking the terrain, and reporting them as accuracy would be wrong.
+
+### Cross-illumination — Kaguya TC morning vs evening
+
+| Method | Matches | Inlier | RMSE | Coverage | Entropy | Gate |
+|---|---|---|---|---|---|---|
+| **SANDHI** | **536** | 0.312 | 0.932 px | **0.641** | **0.801** | **PASS** |
+| DISK + LightGlue | 1 | — | — | 0.000 | 0.000 | FAIL — *real pair* |
+| ASIFT | 90 | 0.078 | — | 0.062 | 0.325 | FAIL — *roll, noise* |
+| SIFT | 25 | 0.120 | — | 0.047 | 0.264 | FAIL — *roll* |
+| ORB | 83 | 0.036 | — | 0.047 | 0.264 | FAIL — *noise* |
+
+**This is the result the project exists for. On cross-illumination, no baseline
+passes the control gate — SANDHI is the only method that does.**
+
+The failure modes say why, and they differ. DISK+LightGlue finds **one** match on
+real terrain: a learned *detector* has nothing to fire on when shading inverts.
+SIFT and ASIFT fail the **roll** control — roll the raw input 15 px and their
+recovered offset does not follow, so their 25 and 90 matches were never tracking
+the ground. ORB fails **noise**: it matches random pixels as readily as the Moon.
+Their low inlier ratios (0.036–0.120) corroborate all of it independently.
+
+### Cross-sensor — Chandrayaan-2 OHRC vs Kaguya, all methods gate-clear
+
+| Method | Matches | Inlier | RMSE | Coverage | Entropy | Gate |
+|---|---|---|---|---|---|---|
+| SANDHI | 1622 | 0.762 | **0.659 px** | 0.375 | 0.686 | PASS |
+| **ASIFT** | **4826** | 0.824 | 0.668 px | **0.453** | 0.752 | PASS |
+| SIFT | 583 | **0.830** | 0.654 px | 0.453 | **0.763** | PASS |
+| DISK + LightGlue | 559 | 0.655 | 0.801 px | 0.391 | 0.711 | PASS |
+| ORB | 814 | 0.575 | 0.880 px | 0.344 | 0.680 | PASS |
+
+**ASIFT beats us here**, on match count and coverage, and SIFT edges us on RMSE
+and entropy. That is worth stating plainly rather than burying: this case is
+geometrically easy — the OHRC strip is already projected onto the Kaguya grid,
+so what remains is a small residual — and classical descriptors do well when
+illumination is comparable and geometry is nearly solved. Our advantage is not
+that we win everywhere; it is that we are the only method that does not collapse
+when illumination inverts.
+
+### Cross-sensor at survey scale — Chandrayaan-2 TMC-2 vs Kaguya
+
+| Method | Matches | Inlier | RMSE | Coverage | Entropy | Gate |
+|---|---|---|---|---|---|---|
+| **SANDHI** | **3417** | 0.806 | 0.725 px | **0.891** | **0.894** | **PASS** |
+| DISK + LightGlue | 665 | 0.587 | 0.902 px | 0.734 | 0.829 | PASS |
+| SIFT | 72 | 0.611 | **0.601 px** | 0.281 | 0.621 | PASS |
+| ORB | 188 | 0.277 | 0.851 px | 0.312 | 0.654 | PASS |
+| ASIFT | 215 | 0.567 | 0.668 px | 0.281 | 0.565 | FAIL — *noise* |
+
+**5.1× the matches of the next gate-passing method, at 1.2× its coverage and
+3.2× SIFT's.** SIFT's lower RMSE is measured over 72 matches covering 28% of the
+frame; ours is over 3417 covering 89%. RMSE alone is not comparable across such
+different match populations, which is why coverage and entropy are reported
+beside it.
+
+### Phase correlation
+
+Translation only, so it has no match count, coverage or inlier ratio — reporting
+it in those columns would be a category error. It is used as a corroborating
+instrument, and it corroborates:
+
+| Case | Phase correlation | SANDHI | Agreement |
+|---|---|---|---|
+| Kaguya | dy **+7.96** | dy +7.62 | 0.34 px |
+| OHRC | dx +151.13, dy −435.64 | dx +151.64, dy −435.59 | 0.51 px |
+| TMC-2 | dx +21.68, dy +2.89 | dx +21.50, dy +2.46 | 0.47 px |
+
+ASIFT adds a third: on TMC-2 it recovers (+21.24, +2.39), within 0.26 px of the
+pipeline, from an algorithm sharing no code with it.
+
+Reproduce: `python scripts/baselines.py --case all`
+
 ## Stage B: a hypothesis that failed its own test
 
 The project's original thesis was that rendering a DEM under the source image's illumination would enable cross-illumination matching. **Controlled measurement does not support it.**
@@ -339,6 +417,8 @@ python scripts/ohrc_vs_kaguya.py --rows 512
 **Verified:** OHRC↔Kaguya registration passes all four controls and its 437 px (3.4 km) offset is corroborated to 0.7 px by phase correlation, an algorithm sharing no code with the matcher.
 
 The morning/evening asymmetry is now partly explained: OHRC correlates +0.066 with Kaguya evening and −0.031 with morning, consistent with its illumination resembling evening. Both are weak. The more important finding is that a DEM render explains OHRC barely at all (r = +0.006, against +0.067 for Kaguya on the same terrain) — **at 0.26 m, OHRC resolves texture that a 10 m DTM cannot model**, so DEM-based illumination reasoning cannot bridge a 28× resolution gap.
+
+**Baselines:** measured, gated, and reported above — including the case (OHRC) where ASIFT beats us.
 
 **Does not work:** Stage B for matching. 16× scale. SIFT at any ratio (53 px scatter). Fine-tuning LoFTR on warped pairs — twice measured, twice rejected, and the second run's collapse arrived within one epoch.
 

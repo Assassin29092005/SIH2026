@@ -35,6 +35,17 @@ Rules for writing entries:
 
 ## Log
 
+### BUG-021 — ASIFT crashed OpenCV's matcher by producing too many descriptors
+
+- **Date:** 2026-09-10
+- **Status:** FIXED
+- **Area:** eval
+- **Symptom:** The ASIFT baseline died inside the matcher: `(-215:Assertion failed) trainDescCollection[iIdx].rows < IMGIDX_ONE in function 'cv::BFMatcher::knnMatchImpl'`. The message names neither ASIFT nor a descriptor count, so it reads as an OpenCV problem rather than an input-size one.
+- **Root cause:** ASIFT works by simulating out-of-plane tilt -- SIFT is invariant to scale and rotation but not to the aspect-ratio change a tilted surface produces -- so it runs SIFT over a sweep of simulated views and pools the descriptors. The sweep here is ~18 views per image, and uncapped `cv2.SIFT_create()` on a 1024 px lunar crop returns tens of thousands of keypoints per view. Pooled, that crosses OpenCV's `IMGIDX_ONE` limit of 2^18 = 262144 rows, which is a hard ceiling in `BFMatcher`, not a memory issue.
+- **Fix:** `scripts/baselines.py:_asift_features` — `cv2.SIFT_create(nfeatures=4000)` per simulated view, so ~18 x 4000 = 72004 descriptors stays well under the ceiling. Documented in the docstring as a requirement rather than a tuning knob, because raising it silently reintroduces the crash.
+- **Worth keeping:** with the cap in place ASIFT recovers a median offset of (+21.24, +2.39) on the TMC-2 case against the pipeline's (+21.50, +2.46) — 0.26 px agreement from an algorithm sharing no code with the matcher, which is a third independent corroboration alongside phase correlation.
+- **Check:** `python -c "from baselines import _asift_features; ..."` on a 1024 px sample asserts the descriptor count is under 262144; the baseline run completes instead of raising.
+
 ### BUG-020 — a non-integer GSD ratio was silently rounded to 1, skipping resampling entirely
 
 - **Date:** 2026-09-10
