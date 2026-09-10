@@ -61,8 +61,25 @@ Needs same-date NAC pairs across several emission angles. Until then, 12.3° is 
 ### 1.4 Non-rigid deformation
 Only similarity, affine and homography are fitted. Real lunar registration over long strips has terrain-induced distortion no global model captures. Thin-plate splines or a local mesh would fit it — and the existing held-out model-selection framework already provides the honest way to decide whether the extra freedom is earned.
 
-### 1.5 IIRS
-The problem statement names OHRC, TMC **and IIRS**. IIRS is hyperspectral at ~80 m/px and has never been touched. Whether the pipeline transfers to it is unknown.
+### 1.5 IIRS — **MEASURED 2026-09-10, does not register**
+
+Done, and negative. IIRS 1504 nm against Kaguya gives correlation +0.033, 44
+matches, 6 inliers. Three controls isolate the cause: two bands of the same cube
+match at 100% inliers projected and unprojected (so the projection, strip shape
+and imagery are all fine), and Kaguya against itself decimated to 85.08 m/px in
+the same 288 px shape matches at 61.5% (so the 11.49x ratio is fine). The gap is
+the instrument pairing itself -- an infrared spectrometer against a visible
+framing camera at 85 m/px.
+
+Two hypotheses were tested and refuted: band choice (the whole 898-4504 nm sweep
+fails equally) and reflectance-vs-radiance (identical correlation, +0.0326).
+
+**Next, if revived:** Chandrayaan-1 M3, an imaging spectrometer at ~140 m/px that
+IS indexed by PDS ODE and needs no PRADAN login. IIRS-to-M3 is
+spectrometer-to-spectrometer at 1.6x rather than spectrometer-to-camera at 11.5x,
+which is the pairing the controls suggest should work.
+
+`python scripts/iirs_vs_kaguya.py --controls`
 
 ---
 

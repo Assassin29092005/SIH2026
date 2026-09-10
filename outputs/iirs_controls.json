@@ -1,0 +1,20 @@
+[
+  {
+    "control": "1504 vs 1700 nm, projected",
+    "corr": 0.9862,
+    "matches": 3528,
+    "inlier_ratio": 1.0
+  },
+  {
+    "control": "1504 vs 1700 nm, raw swath",
+    "corr": 0.985,
+    "matches": 3645,
+    "inlier_ratio": 1.0
+  },
+  {
+    "control": "Kaguya morning vs evening, decimated 11.49x",
+    "corr": -0.5443,
+    "matches": 1618,
+    "inlier_ratio": 0.615
+  }
+]

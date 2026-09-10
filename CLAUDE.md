@@ -101,7 +101,9 @@ PRADAN's `FileSizeInBytes` column is the **uncompressed** product size, not the 
 
 **TMC-2** `ch2_tmc_ndn_20201126T1610528086` ortho + DTM — GeoTIFF on a SelenoGraphic sphere (radius 1737400). Ortho 10380 x 341544 at ~5.05 m/px; DTM 5190 x 170772 at ~10.1 m/px over **identical bounds**, so ortho pixel (i,j) is DTM pixel (i/2, j/2). Verified: corr(ortho, DEM) = +0.364 on a 512 window at the equator, 224 m relief, 100% valid.
 
-**Neither product carries sun angles.** OHRC's PDS4 label has `pixel_resolution` and `start_date_time` but no incidence/azimuth; TMC-2's shapefile records list `INC_ANGLE`, `EMI_ANGLE`, `PHA_ANGLE` as 0.0. So illumination must be recovered by correlation sweep exactly as for Kaguya.
+**OHRC and TMC-2 carry no sun angles.** OHRC's PDS4 label has `pixel_resolution` and `start_date_time` but no incidence/azimuth; TMC-2's shapefile records list `INC_ANGLE`, `EMI_ANGLE`, `PHA_ANGLE` as 0.0. So illumination must be recovered by correlation sweep exactly as for Kaguya.
+
+**IIRS is the exception, corrected 2026-09-10.** Its archive ships an `_obs_` backplane with per-pixel incidence, emission and phase (~57.7 deg and ~10.2 deg over the tested overlap), and a `_loc_` backplane with per-pixel latitude, longitude, radius and elevation in the MOON_ME frame. The *shapefile* angles are 0.0 for IIRS too, which is what made this look universal; the product itself carries the geometry. Also note the label's `pixel_resolution` is 85.08 m, not the ~80 m quoted in the source table.
 
 **Caution on TMC-2 footprint selection.** These derived products are long strips — this one spans 28.4N to 28.5S, ~1730 km. Ranking candidates by centre latitude, as `ch2_footprints.py --pick tmc` currently does, measures strip length rather than suitability, and inflates the NAC counts because the bounding box is enormous. OHRC footprints are small (3 km swath) so centre latitude is meaningful there. **Fix the TMC picker to rank on overlap area and per-area NAC density before downloading more.**
 

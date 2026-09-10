@@ -235,6 +235,59 @@ OHRC. The label value is used only to size the anti-alias kernel, so the cost is
 
 Reproduce: `python scripts/offset_origin.py --chunks 6`
 
+## IIRS: measured, controlled, and it does not work
+
+The problem statement names OHRC, TMC **and IIRS**. Two of the three register.
+The third does not, and the difference between "we did not try" and "we tried and
+here is exactly why it fails" is the whole point of this section.
+
+IIRS is an imaging spectrometer: 255 bands from 0.729 to 5.010 um at 85.08 m/px.
+Against Kaguya TC evening, where the strip crosses tile N18E009N15E012SC:
+
+| | corr | matches | inliers |
+|---|---|---|---|
+| **IIRS 1504 nm vs Kaguya** | **+0.033** | 44 | 6 (13.6%) |
+
+No fit. **Two hypotheses were tested and both were wrong.**
+
+**Band choice is not the driver.** The obvious story: below ~2.5 um the signal is
+reflected sunlight and shades like Kaguya; beyond ~3 um thermal emission
+dominates and cannot. Sweeping the spectrum refutes it — every wavelength fails
+about equally:
+
+| nm | 898 | 1504 | 1993 | 2398 | 3004 | 3493 | 4504 |
+|---|---|---|---|---|---|---|---|
+| matches | 4 | 0 | 0 | 4 | 5 | 0 | 0 |
+
+**Reflectance vs radiance is not the driver either.** A reflectance product has
+the illumination divided out, so the radiance cube — which keeps the shading
+Kaguya records — should have done better. Both give correlation **+0.0326**, the
+same number to four decimals.
+
+### The controls, which is what makes this a result
+
+| Control | Result | Rules out |
+|---|---|---|
+| Two bands of one cube, both projected | 3528 matches, **100%** inliers, corr +0.986 | the projection, the strip shape, the imagery |
+| Same, unprojected raw swath | 3645 matches, 100% inliers | projection loss specifically |
+| Kaguya morning vs evening at 85.08 m/px, same 288 px shape | 1618 matches, **61.5%** inliers | the 11.49x scale ratio |
+
+The pipeline handles this scale, this shape and this projection. What it does not
+bridge is the instrument gap. Kaguya *averaged* to 85 m keeps its large-scale
+shading pattern, which is why Kaguya-vs-Kaguya matches at 11.49x; IIRS's native
+85 m pixels do not carry that structure to align to.
+
+**The scale control is a positive result in its own right: 11.49x works.** That
+extends the demonstrated scale envelope past the 8x reported above — the old 16x
+failure was window starvation at 64x64, not a limit of the method.
+
+**A better reference probably exists.** Chandrayaan-1 M3 is an imaging
+spectrometer at ~140 m/px and, unlike Chandrayaan-2, **is indexed by PDS ODE**,
+so it needs no login. IIRS-to-M3 is spectrometer-to-spectrometer at 1.6x rather
+than spectrometer-to-camera at 11.5x. Untested; see ROADMAP.
+
+Reproduce: `python scripts/iirs_vs_kaguya.py --controls`
+
 ## Stage B: a hypothesis that failed its own test
 
 The project's original thesis was that rendering a DEM under the source image's illumination would enable cross-illumination matching. **Controlled measurement does not support it.**
@@ -442,7 +495,7 @@ python scripts/ohrc_vs_kaguya.py --rows 512
 | Find match points between source and reference | **complete** | LoFTR + local contrast norm, control-gated |
 | **Illumination variation** | **complete** | 0.85 px cross-window spread, 54% inliers; corroborated by phase correlation |
 | **Viewpoint variation** | **complete, envelope measured** | model selection validated on nadir controls; matching succeeds to 12.3° obliquity gap, fails ≥14.9° |
-| Runs on real Chandrayaan-2 data | **complete, two instruments** | OHRC: 1443 matches, RMSE 0.752 px, corroborated to 0.7 px by phase correlation. TMC-2: 3085 matches, 99.3% inliers, RMSE 0.595 px, coverage 0.891 |
+| Runs on real Chandrayaan-2 data | **complete, two of three instruments** | OHRC: 1443 matches, RMSE 0.752 px, corroborated to 0.7 px by phase correlation. TMC-2: 3085 matches, 99.3% inliers, RMSE 0.595 px, coverage 0.891 |
 | **Scale variation** | **complete** | 1× to 8×, spread 0.41–0.92 px, noise rejection 30–56× |
 | **Sub-pixel accuracy of source image** | **complete** | RMSE **0.786–0.893 px** |
 | **Uniform distribution across the images** | **complete** | coverage **0.89**, entropy **0.89** on TMC-2; 0.66 / 0.80 on Kaguya |

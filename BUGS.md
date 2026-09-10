@@ -35,6 +35,17 @@ Rules for writing entries:
 
 ## Log
 
+### BUG-024 — the IIRS scale control exposed a wrong claim in the README's scale table
+
+- **Date:** 2026-09-10
+- **Status:** FIXED
+- **Area:** eval
+- **Symptom:** The README's scale table stops at 8x and records 16x as "starved: 64x64 input", which reads as a ceiling of the method. Investigating IIRS required matching at **11.49x**, and it worked: Kaguya morning vs evening decimated to 85.08 m/px in a 1069x288 window gives 1618 matches at 61.5% inliers. A ratio beyond the published envelope produced one of the better inlier ratios in the project.
+- **Root cause:** The scale ladder swept the *ratio* while holding the source window at 1024x1024, so the output window shrank with every step: 16x left a 64x64 input, which starves LoFTR's coarse grid at 8x8 cells. The measurement conflated "high ratio" with "small window", and only the ratio was named in the table. Nothing was wrong with the numbers -- the label on them was too strong.
+- **Fix:** README now records that 11.49x is demonstrated and that the 16x failure was window starvation rather than a method limit, with `scripts/iirs_vs_kaguya.py --controls` as the reproduction. The scale table is unchanged, since those measurements are correct for the windows they used.
+- **Why it took an unrelated task to find:** every earlier scale test decimated a square Kaguya window. The IIRS geometry forced a tall narrow one (288 px wide, 1069 tall), which keeps the pixel count high while pushing the ratio up -- a combination the ladder never generated.
+- **Check:** `python scripts/iirs_vs_kaguya.py --controls` prints the 11.49x Kaguya-vs-Kaguya control; it must exceed 50% inliers.
+
 ### BUG-023 — IIRS download names from the shapefile are rejected by PRADAN as "File not found"
 
 - **Date:** 2026-09-10
