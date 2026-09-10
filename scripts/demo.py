@@ -32,6 +32,13 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "outputs"
 SAMPLES = ROOT / "samples"
 
+# Native product resolutions, from the PDS4 labels -- read, never estimated
+# (BUG-010). Needed for the "sub-pixel accuracy of source image" metric, which
+# is stated in the SOURCE product's pixels, not the common grid. OHRC's label
+# declares 0.26 m; the measured footprint is 0.3060 x 0.3225 m, so 0.26 is the
+# conservative choice -- a smaller pixel makes the reported error larger.
+OHRC_GSD_M = 0.26
+
 
 def load_sample(case):
     """Committed sample crops, so a fresh clone can run without any download.
@@ -54,7 +61,8 @@ def load_sample(case):
     if src is None or ref is None:
         return None
     return dict(src=src.astype(np.float32), ref=ref.astype(np.float32),
-                gsd=meta["gsd_m"], title=meta["title"], sub=meta["sub"] + "  [sample]",
+                gsd=meta["gsd_m"], source_gsd=meta["source_gsd_m"],
+                title=meta["title"], sub=meta["sub"] + "  [sample]",
                 src_label=meta["src_label"], ref_label=meta["ref_label"])
 
 
@@ -123,6 +131,9 @@ def load_kaguya(row=2000, col=2000, size=1024):
     return dict(src=b["morning"].astype(np.float32),
                 ref=b["evening"].astype(np.float32),
                 gsd=abs(t.transform.a),
+                # Source and reference are the same instrument on one grid, so
+                # the source's native GSD IS the common grid here.
+                source_gsd=abs(t.transform.a),
                 title="Kaguya TC morning vs evening",
                 sub=f"tile {t.tile}, window ({row},{col}) {size}x{size}, 7.40 m/px",
                 src_label="SOURCE  morning", ref_label="REFERENCE  evening")
@@ -144,6 +155,11 @@ def load_ohrc(rows=1024):
     return dict(src=ohrc[sl, :w].astype(np.float32),
                 ref=bands["evening"][sl, :w].astype(np.float32),
                 gsd=7.403,
+                # The OHRC product is 0.26 m/px; what enters the matcher is that
+                # product polynomial-projected to 7.403 m. The PS clause asks
+                # about the PRODUCT, so report the native figure -- 28.5x coarser
+                # is the honest answer, not the projected grid's 0.5 px.
+                source_gsd=OHRC_GSD_M,
                 title="Chandrayaan-2 OHRC vs Kaguya TC reference",
                 sub=f"OHRC 0.26 m/px projected to 7.40 m/px, ~0.6N 23.4E",
                 src_label="SOURCE  Chandrayaan-2 OHRC",
@@ -182,7 +198,7 @@ def load_tmc(lat=0.5, size=1536):
     w = min(src_common.shape[1], ref.shape[1])
     return dict(src=src_common[:h, :w].astype(np.float32),
                 ref=ref[:h, :w].astype(np.float32),
-                gsd=KAGUYA_GSD_M,
+                gsd=KAGUYA_GSD_M, source_gsd=TMC_GSD_M,
                 title="Chandrayaan-2 TMC-2 vs Kaguya TC reference",
                 sub=f"TMC-2 5.05 m/px resampled to 7.40 m/px (1.466x), "
                     f"{bounds.bottom:.2f}N {bounds.left:.2f}E, tile {tile}",
@@ -257,21 +273,36 @@ def run(case: str, out_path: Path):
                  color="#8fa6c0", fontsize=10, pad=6)
     ax.set_axis_off()
 
+    # RMSE lives on the COMMON grid; the PS asks for accuracy in the source
+    # product's own pixels. Both are reported -- see BUG-025.
+    src_gsd = data["source_gsd"]
+    rmse_src = rmse * gsd / src_gsd
     metrics = {
         "match_count": int(len(pa)), "inlier_count": int(inl.sum()),
         "inlier_ratio": float(inl.mean()), "rmse_px": float(rmse),
         "rmse_m": float(rmse * gsd), "sub_pixel": bool(rmse < 1.0),
+        "gsd_m": float(gsd), "source_gsd_m": float(src_gsd),
+        "rmse_source_px": float(rmse_src),
+        "sub_pixel_source": bool(rmse_src < 1.0),
         "coverage": float(cov), "entropy": float(ent),
     }
     verdict = "SUB-PIXEL" if metrics["sub_pixel"] else f"{rmse:.2f} px"
+    src_verdict = ("SUB-PIXEL in source px" if metrics["sub_pixel_source"]
+                   else f"{rmse_src:.1f} source px - limited by the "
+                        f"{gsd:g} m reference")
     fig.suptitle(data["title"], color="#e8eef6", fontsize=15, y=0.975)
     fig.text(0.5, 0.935, data["sub"], color="#6b7c93", fontsize=9, ha="center")
-    fig.text(0.5, 0.018,
+    fig.text(0.5, 0.040,
              f"matches {metrics['match_count']}   "
              f"inliers {metrics['inlier_count']} ({metrics['inlier_ratio']*100:.0f}%)   "
              f"RMSE {rmse:.3f} px = {rmse*gsd:.2f} m  [{verdict}]   "
              f"coverage {cov:.2f}   entropy {ent:.2f}",
              color="#e8eef6", fontsize=11, ha="center", family="monospace")
+    fig.text(0.5, 0.012,
+             f"source {src_gsd:g} m/px  ->  {rmse_src:.3f} px of source  "
+             f"[{src_verdict}]",
+             color=("#2ecc71" if metrics["sub_pixel_source"] else "#c9a227"),
+             fontsize=10, ha="center", family="monospace")
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=110, facecolor=fig.get_facecolor(),
@@ -283,6 +314,7 @@ def run(case: str, out_path: Path):
     print(f"  matches {metrics['match_count']}, inliers {metrics['inlier_count']} "
           f"({metrics['inlier_ratio']*100:.0f}%)")
     print(f"  RMSE {rmse:.3f} px = {rmse*gsd:.2f} m  [{verdict}]")
+    print(f"  source {src_gsd:g} m/px -> {rmse_src:.3f} source px  [{src_verdict}]")
     print(f"  coverage {cov:.2f}, entropy {ent:.2f}")
     print(f"  wrote {out_path}")
     return 0

@@ -64,8 +64,14 @@ def offset_of(pa: np.ndarray, pb: np.ndarray):
             float(np.median(np.abs(dy - np.median(dy)))))
 
 
-def summarise(pa, pb, inliers, resid, shape, gsd_m: float | None = None) -> dict:
-    """The metric block reported everywhere and written to metrics.json."""
+def summarise(pa, pb, inliers, resid, shape, gsd_m: float | None = None,
+              source_gsd_m: float | None = None) -> dict:
+    """The metric block reported everywhere and written to metrics.json.
+
+    `gsd_m` is the COMMON grid both images were resampled onto; `source_gsd_m`
+    is the source product's native resolution. They are usually different and
+    the distinction is the deliverable — see the source-pixel block below.
+    """
     n = len(pa)
     n_in = int(inliers.sum()) if n else 0
     rmse = float(np.sqrt((resid[inliers] ** 2).mean())) if n_in else float("nan")
@@ -82,6 +88,20 @@ def summarise(pa, pb, inliers, resid, shape, gsd_m: float | None = None) -> dict
     if gsd_m:
         out["rmse_m"] = rmse * gsd_m
         out["gsd_m"] = gsd_m
+    if gsd_m and source_gsd_m:
+        # The problem statement asks for "sub-pixel accuracy OF SOURCE IMAGE",
+        # so the metric has to be stated in the source product's own pixels, not
+        # in the common grid both images were resampled onto. The two differ by
+        # the scale ratio and the gap can be large: 0.513 common-grid px at
+        # 7.403 m is 3.80 m, which is 0.75 TMC-2 pixels but 14.6 OHRC pixels.
+        #
+        # Reporting only the common-grid figure leaves a reader unable to check
+        # the PS clause at all, and reporting it AS the source-pixel figure
+        # would overclaim by the scale ratio. Both are written. See BUG-025.
+        src_px = rmse * gsd_m / source_gsd_m
+        out["source_gsd_m"] = source_gsd_m
+        out["rmse_source_px"] = src_px
+        out["sub_pixel_source"] = bool(src_px == src_px and src_px < 1.0)
     return out
 
 

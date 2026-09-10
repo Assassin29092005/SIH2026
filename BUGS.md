@@ -35,6 +35,20 @@ Rules for writing entries:
 
 ## Log
 
+### BUG-025 — RMSE was reported on the common grid, but the PS asks for it in SOURCE pixels
+
+- **Date:** 2026-09-11
+- **Status:** FIXED
+- **Area:** eval
+- **Symptom:** the problem statement asks for "sub-pixel accuracy **of source image**". Every number this project reported was in COMMON-GRID pixels. On TMC-2 the two happen to agree in verdict (0.595 grid px = 0.872 source px, both sub-pixel), so the gap was invisible. On OHRC they do not: 0.752 grid px reads as a clean pass and is **21.4 OHRC pixels**. Nothing in the deliverable JSON let a reader tell the difference, because only one GSD was ever written.
+- **Root cause:** two separate confusions, both hidden by the cases exercised.
+  1. `metrics.summarise` took a single `gsd_m` and emitted `rmse_m`. There was no field for the source product's native resolution, so the PS clause could not be evaluated from the output at all.
+  2. `to_common_gsd` resamples both images to the **coarser** of the pair, but `cli.py` set `gsd = args.gsd or ref_gsd`. That is right only while the source is the finer image. It is wrong for IIRS (85.08 m against Kaguya's 7.403 m), where every reported distance would have been 11.5x too small. Never fired, because IIRS never produced a fit.
+  3. A third trap surfaced fixing it: `--source-gsd` was doing double duty as the resampling ratio AND the native resolution. Those differ whenever the source is projected before matching — `ohrc_project.py` hands over a 0.26 m product as a 7.403 m GeoTIFF — so a single flag cannot express OHRC at all.
+- **Fix:** `sandhi/metrics.py:67` takes `source_gsd_m` and emits `rmse_source_px`, `source_gsd_m` and `sub_pixel_source`, absent rather than defaulted when unknown. `sandhi/pipeline.py:89` derives the common GSD as `max(src_gsd, ref_gsd)` instead of trusting the caller, so no call site can get it wrong. `sandhi/pipeline.py:75` and `sandhi/cli.py` add `source_native_gsd` / `--source-native-gsd`, separate from `--source-gsd`. `scripts/demo.py` carries a per-case native GSD and prints both figures on the figure; `samples/samples.json` records `source_gsd_m` alongside `gsd_m`.
+- **Check:** `tests/test_units.py::test_rmse_is_reported_in_source_pixels_not_common_grid` asserts the OHRC ratio (0.5 grid px at 7.403 m over a 0.26 m product is NOT sub-pixel in source), that TMC-2's is, and that the field is absent rather than silently equal to the grid figure. `tests/test_units.py::test_common_gsd_is_the_coarser_of_the_pair` pins the resampling direction in both orders.
+- **Note:** re-running `scripts/tmc_vs_kaguya.py --lat 0.5 --size 1536` reproduces every prior number exactly (3085 matches, 3064 inliers, RMSE 0.595 px, coverage 0.891, gate PASS) and adds `rmse_source_px` 0.872. The change is additive; no published figure moved.
+
 ### BUG-024 — the IIRS scale control exposed a wrong claim in the README's scale table
 
 - **Date:** 2026-09-10

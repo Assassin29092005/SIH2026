@@ -65,6 +65,7 @@ def cmd_register(args) -> int:
         refine_subpixel=not args.no_refine,
         select_model=not args.no_model_selection,
         gsd_m=gsd,
+        source_native_gsd=args.source_native_gsd,
     )
     if result is None:
         print("no model could be fitted")
@@ -76,7 +77,17 @@ def cmd_register(args) -> int:
     print(f"inliers          {m['inlier_count']} ({m['inlier_ratio']*100:.0f}%)")
     print(f"RMSE             {m['rmse_px']:.3f} px"
           + (f" = {m['rmse_m']:.2f} m" if "rmse_m" in m else "")
+          + (f"  (common grid {m['gsd_m']:g} m/px)" if "gsd_m" in m else "")
           + ("   [SUB-PIXEL]" if m["sub_pixel"] else ""))
+    # The PS asks for sub-pixel accuracy "of source image", so this is the line
+    # that answers it. It is absent when --source-gsd is unknown, rather than
+    # silently falling back to the common-grid figure.
+    if "rmse_source_px" in m:
+        print(f"  in SOURCE px   {m['rmse_source_px']:.3f} px"
+              f"  (source {m['source_gsd_m']:g} m/px)"
+              + ("   [SUB-PIXEL]" if m["sub_pixel_source"] else ""))
+    else:
+        print("  in SOURCE px   unknown - pass --source-gsd and --reference-gsd")
     print(f"coverage         {m['coverage']:.2f}   entropy {m['entropy']:.2f}")
 
     if args.out:
@@ -142,9 +153,20 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--reference", required=True)
     r.add_argument("--out", help="directory for the registered product")
     r.add_argument("--name", help="basename for the outputs")
-    r.add_argument("--gsd", type=float, help="metres per pixel, for RMSE in metres")
-    r.add_argument("--source-gsd", type=float)
-    r.add_argument("--reference-gsd", type=float)
+    r.add_argument("--gsd", type=float,
+                   help="metres per pixel of the common grid, for RMSE in "
+                        "metres. Only a fallback: when both --source-gsd and "
+                        "--reference-gsd are known it is derived instead")
+    r.add_argument("--source-gsd", type=float,
+                   help="m/px of the source FILE as supplied; sets the "
+                        "resampling ratio")
+    r.add_argument("--source-native-gsd", type=float,
+                   help="m/px of the source PRODUCT, if it was projected before "
+                        "being passed here (OHRC: 0.26, supplied at 7.403). "
+                        "Required for the 'sub-pixel accuracy of source image' "
+                        "metric; defaults to --source-gsd")
+    r.add_argument("--reference-gsd", type=float,
+                   help="reference product's native m/px")
     r.add_argument("--no-refine", action="store_true")
     r.add_argument("--no-model-selection", action="store_true")
     r.set_defaults(func=cmd_register)

@@ -5,6 +5,10 @@
   "rmse_px": 0.7036215446666036,
   "rmse_m": 5.208910295166866,
   "sub_pixel": true,
+  "gsd_m": 7.403,
+  "source_gsd_m": 5.05,
+  "rmse_source_px": 1.0314673851815577,
+  "sub_pixel_source": false,
   "coverage": 0.84375,
   "entropy": 0.8599349999210322
 }

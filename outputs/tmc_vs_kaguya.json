@@ -23,11 +23,15 @@
     "entropy": 0.8939782025806176,
     "rmse_m": 4.405084379141116,
     "gsd_m": 7.403,
+    "source_gsd_m": 5.05,
+    "rmse_source_px": 0.8722939364635874,
+    "sub_pixel_source": true,
     "mean_refinement_shift_px": 0.8560160575314986
   },
   "model": "affine",
   "stages": {
     "scale_ratio": 1.465940594059406,
+    "common_gsd_m": 7.403,
     "coarse_offset": [
       22,
       2

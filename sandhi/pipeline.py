@@ -76,21 +76,38 @@ def register(src: np.ndarray, ref: np.ndarray, *,
              src_gsd: float | None = None, ref_gsd: float | None = None,
              refine_subpixel: bool = True, tiled: bool = True,
              coarse: bool = True, select_model: bool = True,
-             gsd_m: float | None = None):
+             gsd_m: float | None = None,
+             source_native_gsd: float | None = None):
     """Register `src` onto `ref`. Returns a result dict, or None if no fit.
 
     The returned dict carries the match points, the fitted model, per-match
     residuals, the metric block, and a `stages` record of how many matches
     survived each step — which is where coverage losses show up.
+
+    `src_gsd` is the resolution of the array PASSED IN; `source_native_gsd` is
+    the resolution of the product it came from. They differ whenever the source
+    was projected before being handed over — `ohrc_project.py` turns a 0.26 m
+    OHRC strip into a 7.403 m GeoTIFF, so `src_gsd` is 7.403 and the native
+    figure is 0.26. The PS's "sub-pixel accuracy of source image" is stated
+    against the native one, so conflating them overclaims by 28.5x. BUG-025.
     """
     cfg = config.get()
     stages: dict = {}
 
     # C -- common GSD, before any normalisation
     scale_k = 1.0
+    common_gsd = gsd_m
     if src_gsd and ref_gsd:
         src, ref, scale_k = to_common_gsd(src, ref, src_gsd, ref_gsd)
         stages["scale_ratio"] = scale_k
+        # `to_common_gsd` resamples to the COARSER of the two, so the grid the
+        # residuals live on is max(src, ref), not the reference's GSD. A caller
+        # passing `gsd_m=ref_gsd` is right only while the source is the finer
+        # image; it is wrong for IIRS at 85.08 m against Kaguya at 7.403 m,
+        # which would report every distance 11.5x too small. Derive it here so
+        # no caller can get it wrong. See BUG-025.
+        common_gsd = max(src_gsd, ref_gsd)
+        stages["common_gsd_m"] = common_gsd
 
     # B -- normalisation
     a8 = normalize.prepare(src)
@@ -132,7 +149,8 @@ def register(src: np.ndarray, ref: np.ndarray, *,
     if f is None:
         return None
 
-    m = metrics.summarise(pa, pb, f["inliers"], f["resid"], src.shape, gsd_m)
+    m = metrics.summarise(pa, pb, f["inliers"], f["resid"], src.shape,
+                          common_gsd, source_native_gsd or src_gsd)
     m["mean_refinement_shift_px"] = moved
     return {"pa": pa, "pb": pb, "conf": conf, "fit": f, "stages": stages,
             "metrics": m, "src": src, "ref": ref, "scale_ratio": scale_k}

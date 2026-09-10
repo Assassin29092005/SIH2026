@@ -92,10 +92,26 @@ from the products, at 0.24°N 70.93°E.
 |---|---|---|---|
 | Matches | **3085** | 1443 | 132 |
 | Inlier ratio | **99.3%** | 98.9% | 49.2% |
-| RMSE | **0.595 px** (4.41 m) | 0.513 px | 0.796 px |
+| RMSE, common grid | **0.595 px** (4.41 m) | 0.513 px (3.80 m) | 0.796 px (5.89 m) |
+| Source product GSD | 5.05 m | **0.26 m** | 7.403 m |
+| **RMSE in source px** | **0.872 ✓** | **14.6 ✗** | **0.796 ✓** |
 | **Coverage** | **0.891** | 0.391 | 0.344 |
 | **Entropy** | **0.894** | 0.731 | 0.630 |
 | Model selected | affine | affine | similarity |
+
+The two RMSE rows are not the same claim, and the PS asks for the second one —
+"sub-pixel accuracy **of source image**". They differ by the scale ratio, so a
+figure that is comfortably sub-pixel on the shared grid can be 14.6 pixels of
+the source product. Both are written to every metrics JSON (`rmse_px` and
+`rmse_source_px`); neither is reported without the other. See BUGS.md BUG-025.
+
+**OHRC does not meet the clause in its own pixels, and cannot against this
+reference.** Kaguya's pixel is 7.403 m. Locating a feature to better than 0.26 m
+against it would mean 0.035 reference pixels — below what the reference image
+itself resolves, for any method. The fix is a finer reference, not a better
+matcher: LROC NAC at 0.5 m/px puts the target at 0.52 NAC pixels, inside the
+0.5–0.8 reference-pixel range measured here. Six NAC products are already on
+disk; the pairing is not yet built. See ROADMAP.
 
 | Control | Result |
 |---|---|
@@ -509,10 +525,18 @@ python scripts/demo.py --case all
 
 Each figure shows source, reference, the registered checkerboard overlay, the correspondences (green inlier / red rejected), where the match points landed on an 8x8 grid, and the metrics. `--list` reports whether each case will use full data or the committed sample.
 
-| Case | Matches | Inliers | RMSE | Coverage |
-|---|---|---|---|---|
-| Kaguya morning vs evening | 132 | 65 (49%) | **0.796 px** | 0.34 |
-| **Chandrayaan-2 OHRC vs Kaguya** | **1443** | **730 (51%)** | **0.752 px = 5.56 m** | 0.28 |
+| Case | Matches | Inliers | RMSE (grid) | RMSE (source px) | Coverage |
+|---|---|---|---|---|---|
+| Kaguya morning vs evening | 132 | 65 (49%) | **0.796 px** | 0.796 ✓ | 0.34 |
+| **Chandrayaan-2 TMC-2 vs Kaguya** | **3085** | **2359 (76%)** | **0.704 px = 5.21 m** | 1.03 | 0.84 |
+| **Chandrayaan-2 OHRC vs Kaguya** | **1443** | **730 (51%)** | **0.752 px = 5.56 m** | 14.6–21.4 ✗ | 0.28 |
+
+These are the *demo* figures, which run `scripts/register.py` — the measurement
+record, with model selection off. The package path (`sandhi register`, selection
+on) fits affine instead of similarity and does better: TMC-2 goes to 0.595 grid
+px / **0.872 source px ✓**, OHRC to 0.513 / 14.6. Same data, same pipeline stages;
+the difference is the transform model, and it is documented rather than quietly
+reported as one number.
 
 ## Setup
 
@@ -559,12 +583,16 @@ python scripts/ohrc_vs_kaguya.py --rows 512
 | **Viewpoint variation** | **complete, envelope measured** | model selection validated on nadir controls; matching succeeds to 12.3° obliquity gap, fails ≥14.9° |
 | Runs on real Chandrayaan-2 data | **complete, two of three instruments** | OHRC: 1443 matches, RMSE 0.752 px, corroborated to 0.7 px by phase correlation. TMC-2: 3085 matches, 99.3% inliers, RMSE 0.595 px, coverage 0.891 |
 | **Scale variation** | **complete** | demonstrated to **19.84×** (M3 ↔ Kaguya, gated, 71.4% inliers); the 1×–8× ladder gives spread 0.41–0.92 px and noise rejection 30–56× |
-| **Sub-pixel accuracy of source image** | **complete** | RMSE **0.786–0.893 px** |
+| **Sub-pixel accuracy of source image** | **complete on TMC-2; reference-limited on OHRC** | TMC-2 **0.872 px of the 5.05 m source product** (0.595 on the 7.403 m common grid). Kaguya 0.796. OHRC is 0.513 grid px but **14.6 px of its own 0.26 m product** — see below |
 | **Uniform distribution across the images** | **complete** | coverage **0.89**, entropy **0.89** on TMC-2; 0.66 / 0.80 on Kaguya |
 | Software + registered product + match points | **complete** | `register.py` writes image, match CSV, metrics JSON |
 | Evaluation metric (RMSE, inlier count, inlier ratio) | **complete** | all three, plus uniformity |
 
-**8 / 8.** One carries a stated limit rather than a hedge: viewpoint is characterised by a measured operating envelope (12.3° works, ≥14.9° does not, with obliquity and illumination confounded in that ladder). Scale is demonstrated to **19.84×**; the ladder's 16× entry below was window starvation at 64×64, not a ceiling, as the 11.49× and 19.84× results later showed.
+**8 / 8, two carrying stated limits rather than hedges.**
+
+Viewpoint is characterised by a measured operating envelope (12.3° works, ≥14.9° does not, with obliquity and illumination confounded in that ladder). Scale is demonstrated to **19.84×**; the ladder's 16× entry below was window starvation at 64×64, not a ceiling, as the 11.49× and 19.84× results later showed.
+
+The sub-pixel row is met on **TMC-2**, the Chandrayaan-2 instrument with survey coverage (8436 catalogued products against OHRC's 624), at 0.872 pixels of the 5.05 m source product. It is **not** met in OHRC's native 0.26 m pixels, and that is a property of the reference rather than of this pipeline: against Kaguya's 7.403 m grid, 0.26 m is 0.035 reference pixels — finer than the reference image resolves. Every method fails that, ours included. LROC NAC at 0.5 m/px moves the target to 0.52 reference pixels, which is inside the range measured here; the data is on disk and the pairing is the next piece of work. Reported this way because the alternative — quoting 0.513 px and letting a reader assume it means OHRC pixels — would overclaim by 28.5×.
 
 ## Honest status
 

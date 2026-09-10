@@ -83,6 +83,21 @@ which is the pairing the controls suggest should work.
 
 ---
 
+### 1.6 OHRC against LROC NAC — the reference is what blocks the PS sub-pixel clause
+The PS asks for "sub-pixel accuracy **of source image**". OHRC's product is 0.26 m/px; the reference it is currently matched against, Kaguya TC, is 7.403 m/px. Meeting the clause in OHRC's own pixels would mean locating a feature to **0.035 reference pixels** — finer than the reference image itself resolves. No matcher achieves that, so this is a data pairing problem, not an algorithm problem. Measured today: 0.513 grid px = 3.80 m = **14.6 OHRC px** (BUGS.md BUG-025).
+
+**LROC NAC at ~0.5 m/px is the reference that makes it reachable.** Sub-0.26 m then means sub-0.52 NAC pixels, inside the 0.5–0.8 reference-pixel range this pipeline already delivers. The scale gap also drops from 28.5x to **1.9x**, well inside the demonstrated envelope, so this is an easier registration than the one already passing.
+
+What it needs, in order:
+
+1. **Footprint intersection.** `ch2_footprints.py --pick ohrc` already ranks OHRC products by NAC coverage across illumination bins, and reports that the six OHRC products nearest the equator all have NAC in all four bins. That picker output is the input to this step; it has not been acted on.
+2. **Check the six NAC products on disk first.** `data/raw/nac/` holds `M106719774LC`, `M106726943RC`, `M1114007294RC`, `M1118716779RC`, `M1274103575RC`, `M1443174042RC` — 3.0 GB, downloaded 2026-08-23, and **no script reads them.** Confirm whether any overlaps the OHRC strip at ~0.6°N 23.4°E before downloading more.
+3. **NAC ingestion.** NAC EDR/CDR are PDS3 pushbroom, not map-projected: same class of problem as OHRC, so `ohrc_project.py`'s inverse-polynomial approach transfers. Budget for the geometry, not the I/O.
+4. **Register at 1.9x**, then report `rmse_source_px` — which the pipeline now emits, so the clause is checkable straight from the metrics JSON rather than by hand.
+5. **Gate it.** No number leaves this step without `scripts/remeasure.py`'s four controls, same as every other result here.
+
+The honest framing until this is done: the clause is **met on TMC-2** at 0.872 source px, and OHRC is reference-limited with a quantified reason and a known fix. Do not quote OHRC's 0.513 grid px as if it were the source-pixel figure.
+
 ## Phase 2 — Making it software rather than scripts
 
 ### 2.1 One package, one entry point
@@ -193,10 +208,11 @@ and the bar is already encoded, so a future attempt is cheap to judge.
 
 ## Suggested order
 
-1. **1.1** — it decides whether the headline number means what we say it means
-2. **2.3** — lock the control gate into CI before the codebase grows
-3. **3.1** — GPU, which unblocks 1.3 and makes everything else faster to iterate on
-4. **2.1 / 2.2** — package it, once the science has stopped moving
-5. Everything else by need
+1. **1.1** — it decides whether the headline number means what we say it means ✔ answered
+2. **1.6** — OHRC ↔ NAC. The only PS clause not fully met, the fix is known, and step 2 of it is free: six NAC products are already on disk and unread
+3. **2.3** — lock the control gate into CI before the codebase grows
+4. **3.1** — GPU, which unblocks 1.3 and makes everything else faster to iterate on
+5. **2.1 / 2.2** — package it, once the science has stopped moving
+6. Everything else by need
 
-Items 1.1 and 2.3 are the two that protect against being wrong. The rest make it pleasant.
+Items 1.1 and 2.3 are the two that protect against being wrong. 1.6 is the one that closes a stated requirement. The rest make it pleasant.

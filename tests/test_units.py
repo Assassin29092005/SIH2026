@@ -86,6 +86,49 @@ def test_summarise_sub_pixel_flag_is_nan_safe():
     assert out["sub_pixel"] is False        # NaN RMSE must not read as sub-pixel
 
 
+def test_rmse_is_reported_in_source_pixels_not_common_grid():
+    """The PS asks for sub-pixel accuracy OF SOURCE IMAGE. BUG-025.
+
+    A residual that is sub-pixel on the common grid is NOT sub-pixel in the
+    source's own pixels whenever the source is finer than the reference, and
+    reporting only the common-grid figure hides that by the scale ratio.
+    """
+    pa = np.zeros((4, 2))
+    inl = np.ones(4, bool)
+    resid = np.full(4, 0.5)                     # 0.5 px on the common grid
+
+    # OHRC: 0.26 m product matched on a 7.403 m grid. 0.5 px = 3.70 m = 14.2
+    # OHRC pixels, so it is sub-pixel on the grid and emphatically not in source.
+    out = metrics.summarise(pa, pa, inl, resid, (64, 64),
+                            gsd_m=7.403, source_gsd_m=0.26)
+    assert out["sub_pixel"] is True
+    assert out["sub_pixel_source"] is False
+    assert out["rmse_source_px"] == pytest.approx(0.5 * 7.403 / 0.26)
+
+    # TMC-2: 5.05 m product on the same grid clears the bar in its own pixels.
+    out = metrics.summarise(pa, pa, inl, resid, (64, 64),
+                            gsd_m=7.403, source_gsd_m=5.05)
+    assert out["sub_pixel_source"] is True
+
+    # Absent rather than silently equal to the common-grid figure.
+    out = metrics.summarise(pa, pa, inl, resid, (64, 64), gsd_m=7.403)
+    assert "rmse_source_px" not in out
+
+
+def test_common_gsd_is_the_coarser_of_the_pair():
+    """`to_common_gsd` resamples to the coarser side, so metres follow max().
+
+    A caller passing the REFERENCE gsd is right only while the source is finer.
+    IIRS at 85.08 m against Kaguya at 7.403 m would report every distance 11.5x
+    too small. BUG-025.
+    """
+    fine, coarse = np.zeros((64, 64), np.float32), np.zeros((64, 64), np.float32)
+    _, _, k = to_common_gsd(fine, coarse, 5.05, 7.403)
+    assert k == pytest.approx(7.403 / 5.05)     # source decimated to the reference
+    _, _, k = to_common_gsd(fine, coarse, 85.08, 7.403)
+    assert k == pytest.approx(7.403 / 85.08)    # reference decimated to the source
+
+
 def test_cross_window_spread():
     tight = [(1.0, 2.0), (1.1, 2.1), (0.9, 1.9)]
     loose = [(1.0, 2.0), (40.0, -30.0), (-20.0, 60.0)]

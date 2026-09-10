@@ -154,10 +154,13 @@ def main() -> int:
     m = r["metrics"]
     print("")
     print("=" * 60)
+    # rmse_source_px is the PS's own unit -- "sub-pixel accuracy OF SOURCE
+    # IMAGE" -- so it belongs in the printed block, not only in the JSON.
     for k in ("match_count", "inlier_count", "inlier_ratio", "rmse_px",
-              "rmse_m", "coverage", "entropy"):
+              "rmse_m", "rmse_source_px", "sub_pixel_source",
+              "coverage", "entropy"):
         if k in m and m[k] is not None:
-            print(f"  {k:<14} {m[k]}")
+            print(f"  {k:<16} {m[k]}")
     print(f"  {'model':<14} {r['fit']['kind']}")
     print(f"  {'stages':<14} {r['stages']}")
     print("=" * 60)
