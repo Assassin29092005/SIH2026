@@ -305,10 +305,12 @@ same number to four decimals.
 | Same, unprojected raw swath | 3645 matches, 100% inliers | projection loss specifically |
 | Kaguya morning vs evening at 85.08 m/px, same 288 px shape | 1618 matches, **61.5%** inliers | the 11.49x scale ratio |
 
-The pipeline handles this scale, this shape and this projection. What it does not
-bridge is the instrument gap. Kaguya *averaged* to 85 m keeps its large-scale
-shading pattern, which is why Kaguya-vs-Kaguya matches at 11.49x; IIRS's native
-85 m pixels do not carry that structure to align to.
+The pipeline handles this scale, this shape and this projection.
+
+The explanation we reached for at this point — that the *instrument gap* is
+unbridgeable, since Kaguya averaged to 85 m keeps its large-scale shading while
+IIRS's native 85 m pixels do not — is stated here only because the next section
+demolishes it. It was a hypothesis, and it was wrong.
 
 **The scale control is a positive result in its own right: 11.49x works.** That
 extends the demonstrated scale envelope past the 8x reported above — the old 16x

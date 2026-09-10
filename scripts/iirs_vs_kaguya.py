@@ -30,23 +30,34 @@ Run them with `--controls`.
 | Same, unprojected raw swath | 3645 matches, 100% inliers | projection loss specifically |
 | Kaguya morning vs evening decimated to 85.08 m/px, same 288 px shape | 1618 matches, **61.5%** inliers | the 11.49x scale ratio |
 
-So the pipeline handles this scale, this shape and this projection. What it does
-not bridge is the instrument gap: at 85 m/px an infrared spectrometer and a
-visible framing camera record different information over the same ground. Kaguya
-*averaged* to 85 m retains its large-scale shading pattern, which is why
-Kaguya-vs-Kaguya matches at 11.49x. IIRS's native 85 m pixels do not carry that
-shading structure to align to.
+So the pipeline handles this scale, this shape and this projection.
+
+The explanation offered here at first -- that an infrared spectrometer and a
+visible framing camera simply record different information -- was TESTED AND IS
+WRONG. See `iirs_vs_m3.py`. Chandrayaan-1 M3, also a spectrometer, registers
+against Kaguya at 71.4% inliers and a 19.84x scale ratio, passing the full gate.
+A spectrometer does match a camera, at a LARGER scale gap than the one IIRS
+fails at.
 
 Note the scale control is a positive result in its own right: **11.49x works**,
 which extends the demonstrated scale envelope beyond the 8x in the README. The
 old 16x failure was window starvation (a 64x64 input), not a method ceiling.
 
-WHAT WOULD PLAUSIBLY WORK
--------------------------
-A same-modality reference. Chandrayaan-1 M3 is an imaging spectrometer at
-~140 m/px and, unlike Chandrayaan-2, **is indexed by PDS ODE**, so it needs no
-login. IIRS-to-M3 would be spectrometer-to-spectrometer at a 1.6x ratio rather
-than spectrometer-to-camera at 11.5x. Untested here; see ROADMAP.
+WHAT SURVIVES, AFTER M3
+-----------------------
+IIRS also fails against M3 itself -- spectrometer to spectrometer at 1.51x --
+with correlation -0.027. So it fails against a camera AND against a matching
+instrument, while matching ITSELF at 100%.
+
+The one thing every control here shares is that both sides carry the SAME
+geolocation. Two bands of one cube cannot detect an error in the backplane they
+both use: it cancels exactly. And IIRS's backplane fits a polynomial to 3.96 px
+where M3's fits to 0.15 px, 26x worse.
+
+Surviving hypothesis: IIRS's geolocation places the imagery on the wrong ground.
+NOT proven -- reprojecting directly from the per-pixel backplane (`--direct`,
+0.449 px nearest-sample) does not fix it either. Settling it needs an
+independent geolocation from SPICE reconstruction. See ROADMAP.
 
 GEOMETRY COMES FROM A BACKPLANE, NOT A BOUNDING BOX
 ---------------------------------------------------
