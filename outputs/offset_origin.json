@@ -1,0 +1,86 @@
+{
+  "chunks": [
+    {
+      "scale_x": 1.0164346832544862,
+      "scale_y": 0.9980982432062817,
+      "rotation_deg": -0.2805652524108521,
+      "shear": -0.011139679020490366,
+      "anisotropy": 0.9819600409644684,
+      "chunk": 0,
+      "row0": 0,
+      "matches": 172,
+      "inliers": 117,
+      "dx": 153.5479023414667,
+      "dy": -436.58054800921747
+    },
+    {
+      "scale_x": 1.0179559826066633,
+      "scale_y": 1.000469096813748,
+      "rotation_deg": -0.26419664729984277,
+      "shear": 0.007938107640175975,
+      "anisotropy": 0.9828215698009486,
+      "chunk": 1,
+      "row0": 589,
+      "matches": 191,
+      "inliers": 105,
+      "dx": 143.9221293872215,
+      "dy": -437.0648293026551
+    },
+    {
+      "scale_x": 1.014367550315304,
+      "scale_y": 1.0176632461190476,
+      "rotation_deg": -0.2976579612254068,
+      "shear": -0.000299842849993203,
+      "anisotropy": 1.0032490154113458,
+      "chunk": 2,
+      "row0": 1178,
+      "matches": 160,
+      "inliers": 84,
+      "dx": 147.0459669454647,
+      "dy": -442.92280268791376
+    },
+    {
+      "scale_x": 1.0177695682893264,
+      "scale_y": 1.0019392969094534,
+      "rotation_deg": -0.568141410328818,
+      "shear": -0.015489574815973099,
+      "anisotropy": 0.9844461144515446,
+      "chunk": 3,
+      "row0": 1767,
+      "matches": 233,
+      "inliers": 160,
+      "dx": 150.273227087956,
+      "dy": -433.0455197177618
+    },
+    {
+      "scale_x": 1.0177555858017635,
+      "scale_y": 0.9975575904006139,
+      "rotation_deg": -0.4027378035452275,
+      "shear": -0.018671657196061144,
+      "anisotropy": 0.9801543752911578,
+      "chunk": 4,
+      "row0": 2356,
+      "matches": 237,
+      "inliers": 173,
+      "dx": 152.05883825109316,
+      "dy": -429.63587946411104
+    },
+    {
+      "scale_x": 1.0192965626330033,
+      "scale_y": 1.0123509988763253,
+      "rotation_deg": -0.2767281951119579,
+      "shear": 0.004455643948278454,
+      "anisotropy": 0.9931859244784104,
+      "chunk": 5,
+      "row0": 2945,
+      "matches": 120,
+      "inliers": 56,
+      "dx": 141.0934811193825,
+      "dy": -435.56290636448307
+    }
+  ],
+  "verdict": "Scale error is CROSS-TRACK ONLY: 1.0173 at 25.1 sigma, while along-track is indistinguishable from 1.0 (1.0047, 1.4 sigma). A map projection error -- radius, latitude convention, degrees-per-metre -- scales both axes together and cannot produce this. A cross-track-only scale is a swath-width term (altitude or field of view) in Chandrayaan-2's own geometry.",
+  "scale_x_mean": 1.017263322150091,
+  "scale_y_mean": 1.0046797453875784,
+  "dy_drift_px_per_1000_rows": 1.8070502405750155
+}

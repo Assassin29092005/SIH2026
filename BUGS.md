@@ -35,6 +35,17 @@ Rules for writing entries:
 
 ## Log
 
+### BUG-022 — offset diagnosis reported "isotropic" when the axes differ by 25 sigma
+
+- **Date:** 2026-09-10
+- **Status:** FIXED
+- **Area:** eval
+- **Symptom:** `scripts/offset_origin.py` classified the OHRC scale residual as **ISOTROPIC** -- "i.e. OUR error, not Chandrayaan-2's" -- from cross-track 1.0170 and along-track 0.9914. That is the opposite of the correct conclusion, and it was printed as a verdict.
+- **Root cause:** The classifier compared raw magnitudes, `off_x > 3 * off_y`, where `off = |scale - 1|`. But the two axes are not measured with comparable precision: cross-track scatter across chunks is sd 0.0015 while along-track is 0.0076, five times looser, because a near-equatorial north-south strip gives the matcher far more cross-track structure to lock onto. On significance the same numbers read cross-track **25.1 sigma** and along-track **1.4 sigma** -- one real, one indistinguishable from 1.0. Magnitudes also hid that the two deviations had *opposite signs*, which no isotropic scaling can produce.
+- **Fix:** `scripts/offset_origin.py` — the verdict now divides by the standard error of the per-chunk mean and branches on 3 sigma, not on relative magnitude. Chunk count raised from 4 to 6 in the documented invocation, which tightened cross-track scatter from 0.0029 to 0.0015.
+- **Why it matters beyond this script:** the wrong verdict was self-consistent and quotable. It would have gone into the README as "our projection is at fault", closing ROADMAP 1.1 with the wrong answer and sending future work at code that is correct. Same shape as BUG-003 and BUG-005: the measurement was right and the thing interpreting it was wrong.
+- **Check:** `python scripts/offset_origin.py --chunks 6` prints the sigma for each axis beside the verdict, so the classification can be audited from its own output rather than trusted.
+
 ### BUG-021 — ASIFT crashed OpenCV's matcher by producing too many descriptors
 
 - **Date:** 2026-09-10

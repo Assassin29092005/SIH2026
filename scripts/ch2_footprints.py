@@ -67,7 +67,10 @@ def bbox(rec: dict) -> tuple | None:
 def summarise() -> int:
     for label, pattern in [("OHRC", "ch2_ohr_cal*.shp"), ("TMC-2", "ch2_tmc_cal*.shp"),
                            ("TMC-2 ortho", "ch2_tmc_derived_ortho*.shp"),
-                           ("TMC-2 DTM", "ch2_tmc_derived_dtm*.shp")]:
+                           ("TMC-2 DTM", "ch2_tmc_derived_dtm*.shp"),
+                           # IIRS: needs IIRS_ShapeFiles.zip from PRADAN's Other
+                           # Downloads. Absent until then, and load() returns [].
+                           ("IIRS", "ch2_iir*.shp")]:
         recs = load(pattern)
         if not recs:
             continue

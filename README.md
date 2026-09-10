@@ -194,6 +194,47 @@ pipeline, from an algorithm sharing no code with it.
 
 Reproduce: `python scripts/baselines.py --case all`
 
+## Where the 3.4 km offset comes from
+
+The registered OHRC product sits ~437 px (3.4 km) from where the Kaguya frame
+puts it. This was reported for weeks as "the offset between our projected OHRC
+and the Kaguya frame", never as Chandrayaan-2 geolocation error, because the two
+causes produce an identical signature and had not been separated. They now have
+been.
+
+**It is Chandrayaan-2's, not ours.** Three independent legs:
+
+| Evidence | Measurement |
+|---|---|
+| Our projection reproduces CH-2's own geolocation | **0.179 m** (0.584 px), **18101× smaller** than the discrepancy |
+| TMC-2 bypasses our projection entirely, agrees with Kaguya | **~160 m** |
+| Residual scale is **cross-track only** | 1.0173 at **25.1σ**; along-track 1.0047 at **1.4σ** |
+
+The third leg is the decisive one. A map projection error — body radius,
+latitude convention, degrees-per-metre — scales **both** axes together, by
+construction. Only the sensor geometry can scale one. Along-track is
+indistinguishable from 1.0.
+
+Two distinct faults are present and should not be conflated: a **437 px
+translation** (pointing/ephemeris bias) and a **1.7% cross-track scale**
+(swath-width term — altitude or field of view). The scale accounts for only
+~8.6 px across a 506 px product, so it does not explain the translation.
+
+**A side finding worth its own line.** The PDS4 label declares
+`pixel_resolution = 0.26`. The product's own geometry sidecar says otherwise:
+
+| | Measured from 94,743 geolocation samples | Label |
+|---|---|---|
+| Cross-track | **0.3060 m/px** (sd 0.0016) | 0.26 |
+| Along-track | **0.3225 m/px** (sd 0.0005) | 0.26 |
+
+The label is rounded, and isotropic where the truth is anisotropic by 5.4%. That
+anisotropy is independently why model selection prefers affine over similarity on
+OHRC. The label value is used only to size the anti-alias kernel, so the cost is
+~20% over-blurring — sharpness, not geolocation.
+
+Reproduce: `python scripts/offset_origin.py --chunks 6`
+
 ## Stage B: a hypothesis that failed its own test
 
 The project's original thesis was that rendering a DEM under the source image's illumination would enable cross-illumination matching. **Controlled measurement does not support it.**
@@ -422,13 +463,13 @@ The morning/evening asymmetry is now partly explained: OHRC correlates +0.066 wi
 
 **Does not work:** Stage B for matching. 16× scale. SIFT at any ratio (53 px scatter). Fine-tuning LoFTR on warped pairs — twice measured, twice rejected, and the second run's collapse arrived within one epoch.
 
-**Known limits:** LoFTR capped near 1024×1024 on CPU, which is what bounds scale at 8× rather than anything about the method. Obliquity beyond ~13° is not matchable, and the ladder that measured it confounds obliquity with illumination change. Matching takes tens of seconds per pair on CPU; a live demo should use the committed figures or a GPU. Whether the 3.4 km offset reflects Chandrayaan-2 geolocation error or residual error in our own projection is not separated — both would produce this signature.
+**Known limits:** LoFTR capped near 1024×1024 on CPU, which is what bounds scale at 8× rather than anything about the method. Obliquity beyond ~13° is not matchable, and the ladder that measured it confounds obliquity with illumination change. Matching takes tens of seconds per pair on CPU; a live demo should use the committed figures or a GPU. The 3.4 km offset is now separated: it is Chandrayaan-2's, established three independent ways (see above).
 
 ## What would make this production software
 
 See [ROADMAP.md](ROADMAP.md). The two items that matter most are not features:
 
-1. **Separating Chandrayaan-2 geolocation error from error in our own projection.** The measured 3.4 km offset has two possible causes and we cannot yet distinguish them. Until then it is "the offset between our projected OHRC and the Kaguya frame", not Chandrayaan-2's geolocation error.
+1. **Correcting for the measured OHRC geometry.** The label's `pixel_resolution = 0.26` is wrong — the product's own geometry gives 0.3060 x 0.3225 m — and it currently sizes the anti-alias kernel, over-blurring by ~20%. Using the measured values should sharpen every OHRC number.
 2. **Wiring the control gate into CI.** It is now a test — `pytest tests/test_pipeline.py::test_control_gate_passes`, alongside one that feeds the gate a deliberately blind matcher and asserts it is rejected — so it can fail a build. What is left is running it on a hosted runner rather than on a laptop.
 
 The roadmap also records what was tried and abandoned — Stage B, blind scale estimation, bucketed selection — so the cost is not paid twice.

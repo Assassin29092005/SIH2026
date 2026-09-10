@@ -16,14 +16,39 @@ What that is **not**: a program someone else can point at their own imagery and 
 
 These are open scientific questions, not polish. Each one could move a number that is currently reported as a result.
 
-### 1.1 Separate Chandrayaan-2 geolocation error from our own projection error
-**Status:** unresolved, and it is the most important item here.
+### 1.1 Separate Chandrayaan-2 geolocation error from our own projection error — **ANSWERED 2026-09-10**
 
-The OHRC↔Kaguya registration recovers a 437 px (~3.4 km) offset, corroborated to 0.7 px by phase correlation. But **two different causes produce exactly this signature**: genuine Chandrayaan-2 geolocation error, or residual error in the polynomial projection we built from OHRC's geolocation CSV. We cannot currently tell them apart.
+**It is Chandrayaan-2's, not ours.** Three independent legs, none of which
+relies on the others:
 
-Resolving it needs an independent geometric anchor — registering the same OHRC strip against a second, independently-controlled reference (LROC NAC map-projected products, or LOLA-controlled basemaps). If both references agree on the offset, it is Chandrayaan-2's. If they disagree, it is ours.
+1. **Our projection reproduces CH-2's own geolocation to 0.179 m.** The degree-3
+   inverse fit lands within 0.584 px of the geometry sidecar, which is 18101x
+   smaller than the 3.4 km under investigation. Whatever error the CSV carries,
+   we inherit it rather than create it.
+2. **TMC-2 bypasses our projection entirely and agrees with Kaguya to ~160 m.**
+   It ships as a georeferenced GeoTIFF, so it never touches the polynomial. The
+   Kaguya frame, the matcher, the normalisation and the RANSAC are therefore not
+   the source of a kilometre-scale discrepancy.
+3. **The residual scale is cross-track only:** 1.0173 at **25.1 sigma**, with
+   along-track at 1.0047, **1.4 sigma** — indistinguishable from 1.0. A map
+   projection error (body radius, latitude convention, degrees-per-metre) scales
+   both axes together by construction. Only the sensor geometry can scale one.
 
-Until this is settled, the 3.4 km figure must stay described as "the measured offset between our projected OHRC and the Kaguya frame", not as Chandrayaan-2's geolocation error.
+Two distinct terms are present and should not be conflated: a **~437 px (3.4 km)
+translation**, which is a pointing/ephemeris bias, and a **1.7% cross-track
+scale**, which is a swath-width term (altitude or field of view). The scale
+accounts for only ~8.6 px across the 506 px product, so it does not explain the
+translation — they are separate faults that happen to appear together.
+
+Corroborating, from the same investigation: the PDS4 label declares
+`pixel_resolution = 0.26`, but the product's own geometry gives **0.3060 m
+cross-track and 0.3225 m along-track** (sd 0.0016 and 0.0005 over the full
+20 km strip) — the label is rounded and isotropic where the truth is neither.
+That anisotropy is also why model selection picks affine over similarity for
+OHRC. The label value is used only for the anti-alias kernel, so it costs
+sharpness (~20% over-blur) rather than geolocation.
+
+Reproduce: `python scripts/offset_origin.py --chunks 6`
 
 ### 1.2 Isolate obliquity from illumination in the viewpoint envelope
 The obliquity ladder shows matching succeeds at a 12.3° emission gap and fails from 14.9°. But the one success is also the only image acquired in the same orbit sequence as the anchor; the failures are years apart with different illumination. **Obliquity and illumination are confounded.**
