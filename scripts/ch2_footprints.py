@@ -231,7 +231,15 @@ def pick_iirs(limit: int = 10) -> int:
         print(f"    overlaps {name}: {ow:.3f} x {oh:.3f} deg = {area:.4f} deg^2")
         print(f"    footprint lon {b[0]:.3f}..{b[1]:.3f}  lat {b[2]:.3f}..{b[3]:.3f}")
         print(f"    observed  {rec['OBS_ST_TIM']}")
-        print(f"    download  {rec['DOWNLOAD']}")
+        # PRADAN serves reflectance products with an "_srd" suffix, but the
+        # shapefile's DOWNLOAD field records it inconsistently -- only 40 of 729
+        # records carry it. Searching the browse page for the bare name returns
+        # "File not found", so print the served form as well.
+        dl = str(rec["DOWNLOAD"])
+        srd = dl if dl.endswith("_srd.zip") else dl[:-4] + "_srd.zip"
+        print(f"    download  {srd}")
+        if srd != dl:
+            print(f"              (shapefile says {dl} -- missing the _srd suffix)")
     if cands:
         print("\n  Angles in these records are 0.0, as for TMC-2: IIRS labels carry no")
         print("  usable illumination geometry, so it must be recovered by correlation.")

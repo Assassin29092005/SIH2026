@@ -35,6 +35,17 @@ Rules for writing entries:
 
 ## Log
 
+### BUG-023 — IIRS download names from the shapefile are rejected by PRADAN as "File not found"
+
+- **Date:** 2026-09-10
+- **Status:** FIXED
+- **Area:** data-ingest
+- **Symptom:** `ch2_footprints.py --pick iirs` reported the download name `ch2_iir_ndi_20240427T1010597893_d_rfl_d18.zip`, taken verbatim from the shapefile's `DOWNLOAD` field. Pasting it into PRADAN's "Jump to file" box returns **File not found**, with no indication of what is wrong.
+- **Root cause:** PRADAN serves IIRS reflectance products with an `_srd` suffix before the extension (`..._d_rfl_d18_srd.zip`, visible in its own browse listing), but the shapefile records that suffix **inconsistently**: only 40 of 729 `derived_refl` records carry it, and 428 end in a bare `_d18.zip`. So the metadata and the object store disagree, and the field looks authoritative because for 5% of records it is correct.
+- **Fix:** `scripts/ch2_footprints.py:pick_iirs` — prints the served form (`_srd` appended when absent) and, when it differs, prints the shapefile's version underneath saying the suffix was missing. Neither is hidden, because a future PRADAN change could invert which one is right.
+- **Related, not the same:** BUG-004 is the other PRADAN metadata trap — `FileSizeInBytes` is the *uncompressed* size, so a truncated download looks plausible against the catalogue number. Both say the same thing: PRADAN's catalogue fields describe the product, not the file you receive.
+- **Check:** `python scripts/ch2_footprints.py --pick iirs` prints names ending `_srd.zip` for every candidate.
+
 ### BUG-022 — offset diagnosis reported "isotropic" when the axes differ by 25 sigma
 
 - **Date:** 2026-09-10
