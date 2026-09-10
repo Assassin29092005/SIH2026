@@ -235,6 +235,39 @@ OHRC. The label value is used only to size the anti-alias kernel, so the cost is
 
 Reproduce: `python scripts/offset_origin.py --chunks 6`
 
+## Chandrayaan-1 M3: a fourth instrument, and the largest scale ratio yet
+
+M3 is an imaging spectrometer on Chandrayaan-1, ~147 m/px, indexed by PDS ODE
+and needing no login. It was brought in to explain the IIRS failure, and it
+registers against Kaguya TC on its own terms:
+
+| Metric | M3 ↔ Kaguya |
+|---|---|
+| Matches | 42 |
+| Inlier ratio | **71.4%** |
+| RMSE | **0.704 px** (sub-pixel) |
+| Coverage / entropy | 0.125 / 0.447 |
+| **Scale ratio** | **19.84×** |
+
+| Control | Result |
+|---|---|
+| Real pair | 262 matches, dx −9.56, dy +9.02 |
+| Roll raw input +15 px | dx moved **−15.60** (want −15) |
+| Pure noise | 19 vs 262 — 13.8× |
+| Constant grey | 0 vs 262 |
+
+**19.84× is the largest ratio demonstrated in this project**, and it passes the
+full gate. Together with the 11.49× Kaguya control, it retires the "8×" figure in
+the scale table above: that ceiling was window starvation at 64×64, not a limit
+of the method.
+
+It also refutes the explanation offered for the IIRS failure. A spectrometer
+*does* match a visible framing camera — at a **larger** scale gap than the one
+IIRS failed at. So the instrument pairing was never the problem.
+
+Reproduce: `python scripts/m3.py fetch --id M3G20090204T234545` then
+`python scripts/iirs_vs_m3.py --vs-kaguya --obs M3G20090204T234545`
+
 ## IIRS: measured, controlled, and it does not work
 
 The problem statement names OHRC, TMC **and IIRS**. Two of the three register.
@@ -281,10 +314,37 @@ shading pattern, which is why Kaguya-vs-Kaguya matches at 11.49x; IIRS's native
 extends the demonstrated scale envelope past the 8x reported above — the old 16x
 failure was window starvation at 64x64, not a limit of the method.
 
-**A better reference probably exists.** Chandrayaan-1 M3 is an imaging
-spectrometer at ~140 m/px and, unlike Chandrayaan-2, **is indexed by PDS ODE**,
-so it needs no login. IIRS-to-M3 is spectrometer-to-spectrometer at 1.6x rather
-than spectrometer-to-camera at 11.5x. Untested; see ROADMAP.
+### That explanation was tested and is wrong
+
+M3 was fetched to test it, and it refutes it twice over. IIRS against M3 —
+spectrometer to spectrometer at 1.51× — fails just as badly (corr −0.027, 20
+matches, 20% inliers). And M3 against Kaguya — spectrometer to *camera* at
+19.84× — **works and passes the gate**. So neither the instrument pairing nor
+the scale explains anything.
+
+Everything now eliminated, each by measurement:
+
+| Eliminated | Evidence |
+|---|---|
+| Band choice | 898–4504 nm sweep, uniform failure |
+| Reflectance vs radiance | identical correlation, +0.0326 |
+| Projection method | polynomial fit (3.96 px) **and** direct per-pixel backplane (0.449 px) both fail |
+| Strip shape, imagery | band-vs-band identity, 100% inliers |
+| Scale ratio | 11.49× and 19.84× both work elsewhere |
+| Spectrometer vs camera | M3 ↔ Kaguya passes the gate |
+| M3's geolocation | fits to **0.15 px** where IIRS fits to 3.96 px |
+
+What survives is IIRS's own geolocation. Its backplane is 26× less
+self-consistent than M3's, and the band-vs-band control is structurally blind to
+that — both bands carry the same geolocation, so any error in it cancels
+exactly. IIRS matches itself perfectly and nothing else, which is the signature
+of imagery placed on the wrong ground.
+
+**Not yet proven**, and stated as such: a direct per-pixel reprojection did not
+fix it either, so "the geolocation is wrong" is the surviving hypothesis rather
+than a demonstrated cause. Confirming it needs an independent geolocation for
+IIRS — SPICE reconstruction from the mission kernels — which is the ISIS3/ALE
+path.
 
 Reproduce: `python scripts/iirs_vs_kaguya.py --controls`
 

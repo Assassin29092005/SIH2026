@@ -1,0 +1,14 @@
+[
+  {
+    "flip": false,
+    "registered": false,
+    "m3_gsd": 149.74,
+    "iirs_gsd": 99.06
+  },
+  {
+    "flip": true,
+    "registered": false,
+    "m3_gsd": 149.74,
+    "iirs_gsd": 99.06
+  }
+]

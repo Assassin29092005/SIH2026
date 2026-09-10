@@ -1,0 +1,19 @@
+{
+  "pair": "M3 vs Kaguya",
+  "registered": true,
+  "wavelength_nm": 1508.99,
+  "m3_gsd": 146.86,
+  "match_count": 42,
+  "inlier_ratio": 0.7143,
+  "rmse_px": 0.7041,
+  "coverage": 0.125,
+  "entropy": 0.4466,
+  "model": "similarity",
+  "gate": true,
+  "gate_checks": {
+    "real pair": true,
+    "roll +15 raw": true,
+    "noise": true,
+    "constant": true
+  }
+}

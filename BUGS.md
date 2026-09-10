@@ -45,6 +45,7 @@ Rules for writing entries:
 - **Fix:** README now records that 11.49x is demonstrated and that the 16x failure was window starvation rather than a method limit, with `scripts/iirs_vs_kaguya.py --controls` as the reproduction. The scale table is unchanged, since those measurements are correct for the windows they used.
 - **Why it took an unrelated task to find:** every earlier scale test decimated a square Kaguya window. The IIRS geometry forced a tall narrow one (288 px wide, 1069 tall), which keeps the pixel count high while pushing the ratio up -- a combination the ladder never generated.
 - **Check:** `python scripts/iirs_vs_kaguya.py --controls` prints the 11.49x Kaguya-vs-Kaguya control; it must exceed 50% inliers.
+- **Superseded upward 2026-09-10:** M3 registers against Kaguya at **19.84x**, gated, at 71.4% inliers. That is now the largest demonstrated ratio.
 
 ### BUG-023 — IIRS download names from the shapefile are rejected by PRADAN as "File not found"
 

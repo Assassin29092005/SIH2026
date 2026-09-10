@@ -182,6 +182,50 @@ def project(band: np.ndarray, lat: np.ndarray, lon: np.ndarray, gsd_m: float):
     return out, BoundingBox(west, south, east, north), resid, degree, valid
 
 
+
+def project_direct(band, lat, lon, gsd_m, ignore=None):
+    """Resample using the per-pixel backplane DIRECTLY, with no polynomial fit.
+
+    `project()` fits a global degree-3 inverse map (lon, lat) -> (sample, line).
+    That works when the geolocation is smooth: M3's fits to 0.15 px. IIRS's fits
+    to 3.96 px, 26x worse, and a residual that size is not a smooth surface --
+    it is per-line variation a low-order polynomial cannot represent. Forcing
+    one through it distorts the imagery non-rigidly, which is invisible to a
+    band-vs-band control (both bands get the same distortion) and fatal against
+    any external reference.
+
+    This maps every source pixel to the output cell its OWN coordinates name,
+    via a nearest-neighbour lookup, so the geolocation is used as given.
+    """
+    from scipy.spatial import cKDTree
+
+    dpp = np.degrees(gsd_m / MOON_RADIUS_M)
+    west, east = float(lon.min()), float(lon.max())
+    south, north = float(lat.min()), float(lat.max())
+    width = max(int(round((east - west) / dpp)), 8)
+    height = max(int(round((north - south) / dpp)), 8)
+
+    # Latitude scaled to match longitude's ground spacing, so "nearest" means
+    # nearest on the ground rather than nearest in degrees.
+    coslat = np.cos(np.radians(0.5 * (south + north)))
+    tree = cKDTree(np.column_stack([lon.ravel() * coslat, lat.ravel()]))
+
+    cols = (np.arange(width) + 0.5) * dpp + west
+    rows = north - (np.arange(height) + 0.5) * dpp
+    LON, LAT = np.meshgrid(cols, rows)
+    dist, idx = tree.query(np.column_stack([LON.ravel() * coslat, LAT.ravel()]),
+                           k=1, workers=-1)
+    out = band.ravel()[idx].reshape(height, width).astype(np.float32)
+
+    # Beyond half a pixel from any real sample there is no data, only the
+    # nearest one repeated -- that is padding, not terrain.
+    valid = (dist.reshape(height, width) < dpp * 0.75)
+    if ignore is not None:
+        valid &= (out != ignore)
+    out[~valid] = 0.0
+    return out, BoundingBox(west, south, east, north), float(np.median(dist) / dpp), 0, valid
+
+
 def kaguya_over(bounds: BoundingBox, kind: str = "evening"):
     from triple_io import find_tiles, open_triple
     from rasterio.windows import from_bounds
@@ -206,6 +250,8 @@ def kaguya_over(bounds: BoundingBox, kind: str = "evening"):
 
 # Which cube. This is a physics choice, not a file choice -- see the module
 # docstring. "rfl" has the illumination divided out; "rdn" retains it.
+DIRECT = [False]        # set from --direct
+
 CUBES = {"reflectance": "_d_rfl_d18_srd.qub", "radiance": "_d_rdn_d18_ard.qub"}
 
 
@@ -226,7 +272,8 @@ def run_band(z, stem, wl, target_nm, tile_bounds, gate=True, quiet=False,
         print(f"  swath {band.shape}, valid {100*(band > 0).mean():.1f}%, "
               f"range {band.min():.4f}..{band.max():.4f}")
 
-    src_img, bounds, resid, degree, valid = project(band, la, lo, IIRS_GSD_M)
+    proj = project_direct if DIRECT[0] else project
+    src_img, bounds, resid, degree, valid = proj(band, la, lo, IIRS_GSD_M)
     if not quiet:
         print(f"  projected {src_img.shape} at {IIRS_GSD_M} m/px, "
               f"degree-{degree} inverse fit residual {resid:.3f} px, "
@@ -337,6 +384,8 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--wavelength", type=float, default=1504.0,
                     help="nm; the nearest band is used")
+    ap.add_argument("--direct", action="store_true",
+                    help="use the per-pixel backplane instead of a polynomial fit")
     ap.add_argument("--controls", action="store_true",
                     help="run the three controls that isolate the cause")
     ap.add_argument("--sweep", action="store_true",
@@ -349,6 +398,7 @@ def main() -> int:
     ap.add_argument("--out", default="outputs/iirs_vs_kaguya.json")
     args = ap.parse_args()
 
+    DIRECT[0] = args.direct
     z, stem = product()
     wl = wavelengths(z, stem)
     print(f"{z.name}\n  {len(wl)} bands, {wl.min():.1f}..{wl.max():.1f} nm, "
