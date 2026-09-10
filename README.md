@@ -46,7 +46,7 @@ Both sides brought to a common ground sample distance, then normalised. 1024×10
 
 The ratio is **read from metadata, not estimated** — every product declares its GSD (OHRC 0.26 m, TMC-2 5.05 m, Kaguya 7.40 m, NAC ~0.5–2 m). Blind estimation is confounded (BUG-010) and unnecessary.
 
-At 16× the window collapses to 64×64. Larger windows are blocked by LoFTR's coarse attention, which is O((H·W/64)²) — 2048² needs 17 GB on CPU.
+At 16× the window collapses to 64×64. That is the ladder's own construction, not a limit of the method: it holds the source window at 1024² while raising the ratio, so the output shrinks at every step. Larger *ratios* work fine given a larger window — 11.49× and 19.84× are both demonstrated below (BUGS.md BUG-024). What genuinely bounds window size is LoFTR's coarse attention, O((H·W/64)²): 2048² needs 17 GB on CPU.
 
 ### Real Chandrayaan-2 registration
 
@@ -556,13 +556,13 @@ python scripts/ohrc_vs_kaguya.py --rows 512
 | **Illumination variation** | **complete** | 0.85 px cross-window spread, 54% inliers; corroborated by phase correlation |
 | **Viewpoint variation** | **complete, envelope measured** | model selection validated on nadir controls; matching succeeds to 12.3° obliquity gap, fails ≥14.9° |
 | Runs on real Chandrayaan-2 data | **complete, two of three instruments** | OHRC: 1443 matches, RMSE 0.752 px, corroborated to 0.7 px by phase correlation. TMC-2: 3085 matches, 99.3% inliers, RMSE 0.595 px, coverage 0.891 |
-| **Scale variation** | **complete** | 1× to 8×, spread 0.41–0.92 px, noise rejection 30–56× |
+| **Scale variation** | **complete** | demonstrated to **19.84×** (M3 ↔ Kaguya, gated, 71.4% inliers); the 1×–8× ladder gives spread 0.41–0.92 px and noise rejection 30–56× |
 | **Sub-pixel accuracy of source image** | **complete** | RMSE **0.786–0.893 px** |
 | **Uniform distribution across the images** | **complete** | coverage **0.89**, entropy **0.89** on TMC-2; 0.66 / 0.80 on Kaguya |
 | Software + registered product + match points | **complete** | `register.py` writes image, match CSV, metrics JSON |
 | Evaluation metric (RMSE, inlier count, inlier ratio) | **complete** | all three, plus uniformity |
 
-**8 / 8.** Two carry stated limits rather than hedges: viewpoint is characterised by a measured operating envelope (12.3° works, ≥14.9° does not, with obliquity and illumination confounded in that ladder), and scale is demonstrated to 8× with the 16× failure explained by a CPU memory bound rather than by the method.
+**8 / 8.** One carries a stated limit rather than a hedge: viewpoint is characterised by a measured operating envelope (12.3° works, ≥14.9° does not, with obliquity and illumination confounded in that ladder). Scale is demonstrated to **19.84×**; the ladder's 16× entry below was window starvation at 64×64, not a ceiling, as the 11.49× and 19.84× results later showed.
 
 ## Honest status
 
