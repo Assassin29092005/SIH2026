@@ -53,3 +53,5 @@ dist/
 
 # training pairs (regenerate with sandhi.training.build_pairs)
 data/interim/trainset/
+docs/*.pdf
+docs/*.docx
