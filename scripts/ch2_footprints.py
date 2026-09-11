@@ -65,6 +65,7 @@ def bbox(rec: dict) -> tuple | None:
 
 
 def summarise() -> int:
+    found = 0
     for label, pattern in [("OHRC", "ch2_ohr_cal*.shp"), ("TMC-2", "ch2_tmc_cal*.shp"),
                            ("TMC-2 ortho", "ch2_tmc_derived_ortho*.shp"),
                            ("TMC-2 DTM", "ch2_tmc_derived_dtm*.shp"),
@@ -74,6 +75,7 @@ def summarise() -> int:
         recs = load(pattern)
         if not recs:
             continue
+        found += 1
         boxes = [b for b in (bbox(r) for r in recs) if b]
         if not boxes:
             print(f"{label}: {len(recs)} records, no usable corners")
@@ -90,6 +92,17 @@ def summarise() -> int:
             n = int(mask.sum())
             bar = "#" * int(40 * n / max(len(centres), 1))
             print(f"  {name:<22} {n:>6}  {bar}")
+
+    # Missing input must SAY it is missing. Printing nothing and exiting 0 is
+    # how BUG-014 hid a broken path for an entire training run: an empty result
+    # is indistinguishable from a real one that found nothing.
+    if not found:
+        print(f"no Chandrayaan-2 footprint shapefiles under {CH2}\n")
+        print("These are small separate downloads from PRADAN's Other Downloads")
+        print("section, NOT the imagery -- OHRC_ShapeFiles.zip is 127 KB and")
+        print("TMC2_ShapeFiles.zip is 4.5 MB. Unzip them into data/raw/ch2/.")
+        print("\n  https://pradan.issdc.gov.in/ch2/   (free account)")
+        return 1
     return 0
 
 

@@ -35,6 +35,21 @@ Rules for writing entries:
 
 ## Log
 
+### BUG-026 — dependency lists named the wrong modules, and a script exited 0 with no output when its input was missing
+
+- **Date:** 2026-09-11
+- **Status:** FIXED
+- **Area:** env
+- **Symptom:** two separate failures, both found by cloning the repository fresh and running the README's own instructions rather than assuming they worked.
+  1. `pip install -r requirements.txt` then `python scripts/ch2_footprints.py --summary` raised `ModuleNotFoundError: No module named 'shapefile'`. `pyshp` was in the `[data]` extra, but `ch2_footprints.py` imports `shapefile` unconditionally at module level. `pytest` was in neither file, while the README quick start tells you to run it.
+  2. On a clone with no imagery, `ch2_footprints.py --summary` printed **nothing** and returned **exit 0**.
+- **Root cause:**
+  1. `requirements.txt` and `pyproject.toml` were maintained by hand and had drifted apart. Neither was the source of truth. `check_env.py` carried a third copy of the list and it was wrong in the same direction — it *required* `spiceypy`, which nothing in the repository imports, and never probed `shapefile`, which one script needs. So the dependency checker printed `Environment OK` on a machine that could not run `ch2_footprints.py`. **A dependency check naming the wrong modules is worse than no check**, because it converts an import error at install time into a crash later, in a script, for a user who has been told the environment is fine.
+  2. `summarise()` skipped each shapefile pattern that matched nothing (`if not recs: continue`) and fell through to `return 0`. With no shapefiles at all, every pattern was skipped and the function reported success having done nothing — the same laundering of missing input into an empty result as BUG-014.
+- **Fix:** `pyproject.toml` is now the single source of truth: `pyshp` moved into core dependencies, `pandas` and `tqdm` removed (imported by nothing for months), `spiceypy` moved to the `[data]` extra since it is only for the unwritten SPICE work in ROADMAP 1.5, and a `[docs]` extra added for `scripts/make_docs.py`. `requirements.txt` regenerated to match and now documents what it deliberately omits. `scripts/check_env.py:17` checks what is actually imported, with `OPTIONAL_MODULES` for `spiceypy`. `scripts/ch2_footprints.py:67` counts what it found and returns 1 with the PRADAN download instructions when the answer is nothing.
+- **Check:** `python scripts/check_env.py` fails if a genuinely imported module is missing; `python scripts/ch2_footprints.py --summary` returns non-zero and prints where to get the shapefiles when they are absent. Both verified in a clean clone with `uv sync --extra dev`, no `PYTHONPATH` set.
+- **Note:** neither bug is reachable on a machine that has been developing the project, because the missing packages were already installed and the data already present. Only a fresh clone shows them, which is the argument for testing that path rather than reasoning about it.
+
 ### BUG-025 — RMSE was reported on the common grid, but the PS asks for it in SOURCE pixels
 
 - **Date:** 2026-09-11
