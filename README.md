@@ -8,6 +8,45 @@ Registering Chandrayaan-2 imagery against independent lunar reference imagery ac
 
 ---
 
+## Quick start
+
+**Clone and run. No imagery download, no account, no GPU.**
+
+```bash
+git clone https://github.com/Assassin29092005/SIH2026.git
+cd SIH2026
+pip install -r requirements.txt
+python scripts/demo.py --case all
+```
+
+Three figures and three metrics files land in `outputs/`, about 20 s per case on CPU. This works on a bare machine because **3 MB of genuine cropped imagery is committed in `samples/`** — real observations, cropped only, never synthetic.
+
+Verified by cloning this repository fresh, with no Chandrayaan-2 archive present and no `PYTHONPATH` set: it runs and reproduces the sample figures. Each figure is labelled `[sample]` when it used the committed crop. The headline tables below are measured on the **full products**, which cover more ground and therefore give different — generally better — numbers: TMC-2 gives 3085 matches at 0.595 px on the full strip against 3073 at 0.760 px on the sample crop. `--list` tells you which source each case will use, and no figure ever silently mixes the two.
+
+| What you need | Why | Size |
+|---|---|---|
+| Python 3.11 + `pip install -r requirements.txt` | `rasterio` wheels bundle GDAL with the PDS4/ISIS3/PDS drivers. No conda, no WSL, no ISIS3 install. | — |
+| Internet, **first run only** | `kornia` fetches the public LoFTR `outdoor` checkpoint to `~/.cache/torch/hub/checkpoints/`. Cached after that; every later run is offline. | 46 MB |
+| PRADAN / JAXA downloads | **Not needed for the demo, the tests, or any figure in this README.** Only for re-running the full-product measurements in the table below. | ~7 GB |
+
+```bash
+python scripts/demo.py --list     # says "committed sample" or "full data" per case
+python scripts/check_env.py       # dependencies + GDAL planetary drivers
+pytest -m "not slow"              # 25 unit tests, ~3 s, no imagery or network
+pytest                            # all 36, including 11 end-to-end on samples/
+```
+
+**Optional — the full products.** Needed only to reproduce the full-resolution rows. Kaguya is a direct download; Chandrayaan-2 needs a free [PRADAN](https://pradan.issdc.gov.in/ch2/) account. Archives are read in place through GDAL `/vsizip/` and must **not** be extracted.
+
+```bash
+python scripts/kaguya.py fetch --site equatorial        # morning + evening + DEM
+python scripts/ch2_footprints.py --pick tmc --at-lat 0  # rank before downloading
+```
+
+`data/` is gitignored, so imagery never enters the repository. Nothing in `samples/` or `outputs/` depends on it.
+
+---
+
 ## The problem, in one number
 
 Two Kaguya Terrain Camera images of **identical terrain**, one shot in lunar morning and one in evening, correlate at **−0.560**.
