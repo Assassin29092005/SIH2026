@@ -12,6 +12,17 @@ Registering Chandrayaan-2 imagery against independent lunar reference imagery ac
 
 **Clone and run. No imagery download, no account, no GPU.**
 
+With [uv](https://docs.astral.sh/uv/) — one command builds the environment, and `uv.lock` pins all 70 packages to the exact versions that produced every number below:
+
+```bash
+git clone https://github.com/Assassin29092005/SIH2026.git
+cd SIH2026
+uv sync --extra dev
+uv run python scripts/demo.py --case all
+```
+
+With pip, if uv is not installed:
+
 ```bash
 git clone https://github.com/Assassin29092005/SIH2026.git
 cd SIH2026
@@ -19,13 +30,15 @@ pip install -r requirements.txt
 python scripts/demo.py --case all
 ```
 
+`uv sync` creates `.venv` itself, so there is no separate venv step, and it installs the `sandhi` command too. Prefix later commands with `uv run`, or activate `.venv` once and drop the prefix. `uv pip install -r requirements.txt` also works as a drop-in if you are managing the environment yourself.
+
 Three figures and three metrics files land in `outputs/`, about 20 s per case on CPU. This works on a bare machine because **3 MB of genuine cropped imagery is committed in `samples/`** — real observations, cropped only, never synthetic.
 
 Verified by cloning this repository fresh, with no Chandrayaan-2 archive present and no `PYTHONPATH` set: it runs and reproduces the sample figures. Each figure is labelled `[sample]` when it used the committed crop. The headline tables below are measured on the **full products**, which cover more ground and therefore give different — generally better — numbers: TMC-2 gives 3085 matches at 0.595 px on the full strip against 3073 at 0.760 px on the sample crop. `--list` tells you which source each case will use, and no figure ever silently mixes the two.
 
 | What you need | Why | Size |
 |---|---|---|
-| Python 3.11 + `pip install -r requirements.txt` | `rasterio` wheels bundle GDAL with the PDS4/ISIS3/PDS drivers. No conda, no WSL, no ISIS3 install. | — |
+| Python 3.11, then `uv sync` or `pip install -r requirements.txt` | `rasterio` wheels bundle GDAL with the PDS4/ISIS3/PDS drivers. No conda, no WSL, no ISIS3 install. | ~1 GB (mostly `torch`) |
 | Internet, **first run only** | `kornia` fetches the public LoFTR `outdoor` checkpoint to `~/.cache/torch/hub/checkpoints/`. Cached after that; every later run is offline. | 46 MB |
 | PRADAN / JAXA downloads | **Not needed for the demo, the tests, or any figure in this README.** Only for re-running the full-product measurements in the table below. | ~7 GB |
 

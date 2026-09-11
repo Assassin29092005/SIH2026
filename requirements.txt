@@ -1,5 +1,14 @@
 # SIH26166 — lunar image correspondence
-# Python 3.11. Install: pip install -r requirements.txt
+# Python 3.11.
+#
+#   uv pip install -r requirements.txt      (fast)
+#   pip install -r requirements.txt         (works everywhere)
+#
+# Or install the project itself, which is the same list plus the `sandhi`
+# command, from pyproject.toml — the single source of truth for dependencies:
+#
+#   uv sync --extra dev
+#   pip install -e ".[dev]"
 #
 # NOTE: rasterio's Windows wheels bundle GDAL (3.10.3) WITH the PDS4 / ISIS3 /
 # PDS / ISIS2 / VICAR drivers. No separate GDAL, conda, or ISIS3 install is
@@ -7,17 +16,24 @@
 
 numpy>=2.0
 scipy>=1.14
-pandas>=2.2
 matplotlib>=3.9
 requests>=2.32
-tqdm>=4.66
 
 # geospatial / planetary
 rasterio>=1.4          # bundles GDAL incl. PDS4 + ISIS3 drivers
 pyproj>=3.7
-spiceypy>=8.0          # SPICE geometry: sun angles, pointing
+pyshp>=2.3             # ch2_footprints.py reads the PRADAN footprint shapefiles
 
 # CV / ML
 opencv-python>=4.10
 torch>=2.5             # CPU build is fine locally; training runs on Kaggle GPU
 kornia>=0.7
+
+# tests — the README's quick start runs pytest, so it belongs here
+pytest>=8.0
+
+# NOT listed, deliberately:
+#   pandas, tqdm  — declared here for months, imported by nothing. Removed.
+#   spiceypy      — only for the SPICE work in ROADMAP 1.5, which is not
+#                   written. `pip install -e ".[data]"` when it is.
+#   python-docx   — only scripts/make_docs.py. `pip install -e ".[docs]"`.

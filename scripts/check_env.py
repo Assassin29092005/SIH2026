@@ -15,16 +15,26 @@ REQUIRED_DRIVERS = ["PDS4", "ISIS3", "PDS", "GTiff"]
 # Present in most builds, useful, but we have fallbacks if absent.
 OPTIONAL_DRIVERS = ["ISIS2", "VICAR", "JP2OpenJPEG", "HDF5", "HDF4"]
 
+# Modules something in this repository actually imports. `spiceypy` was listed
+# here and is imported by NOTHING -- so this check passed on a machine that
+# could not run `ch2_footprints.py`, whose `import shapefile` was never probed.
+# A dependency check that lists the wrong names is worse than none: it reports
+# OK and the crash arrives later, in a script.
 REQUIRED_MODULES = [
     "numpy",
     "scipy",
     "rasterio",
     "pyproj",
-    "spiceypy",
+    "shapefile",      # pyshp -- ch2_footprints.py reads the PRADAN shapefiles
     "cv2",
     "torch",
     "kornia",
+    "matplotlib",     # demo.py is the only renderer, and it is the entry point
 ]
+
+# Needed only for work that is planned rather than done: the SPICE
+# reconstruction in ROADMAP 1.5. Absent is fine.
+OPTIONAL_MODULES = ["spiceypy"]
 
 
 def check_modules() -> list[str]:
@@ -40,6 +50,13 @@ def check_modules() -> list[str]:
         except Exception as exc:  # noqa: BLE001 - we want any import failure
             failures.append(name)
             print(f"  {name:12s} FAIL  {exc}")
+
+    for name in OPTIONAL_MODULES:
+        try:
+            importlib.import_module(name)
+            print(f"  {name:12s} OK    (optional)")
+        except Exception:  # noqa: BLE001
+            print(f"  {name:12s} absent (optional)")
     return failures
 
 

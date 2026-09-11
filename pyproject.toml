@@ -18,12 +18,15 @@ dependencies = [
     "kornia>=0.7",
     "matplotlib>=3.9",
     "requests>=2.32",
-    "tqdm>=4.66",
+    "pyshp>=2.3",       # ch2_footprints.py: the PRADAN footprint shapefiles
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
-data = ["spiceypy>=8.0", "pyshp>=2.3"]
+# spiceypy is for the SPICE reconstruction in ROADMAP 1.5, which is planned and
+# not written. Nothing imports it yet, so it is opt-in rather than a core cost.
+data = ["spiceypy>=8.0"]
+docs = ["python-docx>=1.1"]     # scripts/make_docs.py
 
 [project.scripts]
 sandhi = "sandhi.cli:main"
