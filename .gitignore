@@ -56,3 +56,9 @@ data/interim/trainset/
 docs/*.pdf
 docs/*.docx
 SANDHI_Technical_Report.*
+
+# presentation drafts (not a build product of any script yet - see NEXTSTEP)
+deck/
+
+# the submission video: 34 MB, regenerate with scripts/make_video.py
+outputs/*.mp4
