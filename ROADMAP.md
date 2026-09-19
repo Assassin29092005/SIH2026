@@ -67,17 +67,25 @@ Done, and negative. IIRS 1504 nm against Kaguya gives correlation +0.033, 44
 matches, 6 inliers. Three controls isolate the cause: two bands of the same cube
 match at 100% inliers projected and unprojected (so the projection, strip shape
 and imagery are all fine), and Kaguya against itself decimated to 85.08 m/px in
-the same 288 px shape matches at 61.5% (so the 11.49x ratio is fine). The gap is
-the instrument pairing itself -- an infrared spectrometer against a visible
-framing camera at 85 m/px.
+the same 288 px shape matches at 61.5% (so the 11.49x ratio is fine). The
+explanation reached for at the time -- that the gap is the instrument pairing
+itself, an infrared spectrometer against a visible framing camera -- is stated
+here only because the paragraph below demolishes it. It was a hypothesis, and
+it was wrong.
 
 Two hypotheses were tested and refuted: band choice (the whole 898-4504 nm sweep
 fails equally) and reflectance-vs-radiance (identical correlation, +0.0326).
 
-**Next, if revived:** Chandrayaan-1 M3, an imaging spectrometer at ~140 m/px that
-IS indexed by PDS ODE and needs no PRADAN login. IIRS-to-M3 is
-spectrometer-to-spectrometer at 1.6x rather than spectrometer-to-camera at 11.5x,
-which is the pairing the controls suggest should work.
+**Tried, and it does not work either.** Chandrayaan-1 M3 was fetched precisely
+because IIRS-to-M3 is spectrometer-to-spectrometer at 1.6x rather than
+spectrometer-to-camera at 11.5x, which is the pairing the controls suggested
+should work. It fails: `outputs/iirs_vs_m3.json` records `registered: false` for
+both flip orientations. And M3 against Kaguya -- a spectrometer against a camera
+at **19.84x**, a larger gap than the one IIRS failed at -- passes the full gate.
+So neither the instrument pairing nor the scale explains the IIRS failure. What
+survives is IIRS's own geolocation, and confirming that needs a geolocation from
+*outside* the product: the LOC backplane cannot test itself, and neither can a
+DEM sampled at the coordinates LOC declares (r = +0.991, a null test).
 
 `python scripts/iirs_vs_kaguya.py --controls`
 
