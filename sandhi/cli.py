@@ -24,6 +24,33 @@ from . import config, controls, outputs, pipeline
 ROOT = Path(__file__).resolve().parent.parent
 
 
+def _pixel_size_m(src) -> float | None:
+    """Metres per pixel from a dataset's georeferencing, or None if it has none.
+
+    Two ways to get this wrong, both of which produced silently wrong numbers:
+
+    1. rasterio hands back `Affine.identity()` for a file with no geotransform,
+       and an identity Affine is TRUTHY with `a == 1.0`. A plain PNG therefore
+       reported 1.0 m/px rather than "unknown", and since `pipeline.register`
+       derives the common grid as `max(src_gsd, ref_gsd)` (BUG-025), that
+       invented 1.0 overrode the caller's explicit `--gsd`. See BUG-030.
+    2. `transform.a` is metres only for a CRS whose units are metres. This
+       project's own products are on a SelenoGraphic GEOGCS, where it is
+       DEGREES -- `data/interim/ohrc_7m.tif` reads 0.000244, which is 7.403 m.
+       Same unit confusion as BUG-006.
+
+    Refusing to guess is the point. Blind scale estimation is banned (ROADMAP,
+    "Deliberately not planned"), so when the metadata does not say, this returns
+    None and the caller must be told to pass the GSD explicitly.
+    """
+    if src.crs is None or src.transform is None or src.transform.is_identity:
+        return None
+    size = abs(src.transform.a)
+    if src.crs.is_geographic:
+        return float(np.radians(size) * config.MOON_RADIUS_M)
+    return float(size)
+
+
 def _read(path: Path):
     """Read an image, preferring rasterio so georeferencing survives."""
     p = Path(path)
@@ -31,7 +58,7 @@ def _read(path: Path):
         import rasterio
         with rasterio.open(p) as src:
             return (src.read(1).astype(np.float32), src.crs, src.transform,
-                    abs(src.transform.a) if src.transform else None)
+                    _pixel_size_m(src))
     except Exception:
         import cv2
         img = cv2.imread(str(p), cv2.IMREAD_UNCHANGED)
@@ -172,7 +199,11 @@ def build_parser() -> argparse.ArgumentParser:
     r.set_defaults(func=cmd_register)
 
     c = sub.add_parser("controls", help="run the four-control gate")
-    c.add_argument("--case", choices=["kaguya", "ohrc"], help="use a bundled sample")
+    # Every key in samples/samples.json, not a hand-kept subset. tmc was added
+    # to the samples and to tests/test_pipeline.py's gate parametrisation but
+    # not here, so the packaged CLI could not gate the headline case.
+    c.add_argument("--case", choices=["kaguya", "ohrc", "tmc"],
+                   help="use a bundled sample")
     c.add_argument("--source")
     c.add_argument("--reference")
     c.set_defaults(func=cmd_controls)

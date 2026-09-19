@@ -5,6 +5,8 @@ mis-indexed array produces plausible output rather than a crash. Several of them
 encode bugs that actually happened; see BUGS.md.
 """
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -302,3 +304,73 @@ def test_resample_preserves_the_mean():
     out = pipeline_resample(img, 1.466)
     assert out.shape == (349, 349)
     assert out.mean() == pytest.approx(img.mean(), abs=1.0)
+
+
+def test_controls_cli_offers_every_bundled_sample():
+    """The CLI's --case list must track samples/samples.json, not be hand-kept.
+
+    `sandhi controls --case tmc` was rejected while samples.json carried a tmc
+    entry and tests/test_pipeline.py already gated that case — so the packaged
+    entry point could not run the control gate on the one case that meets the
+    PS's source-pixel clause. A duplicated list drifting from its own source of
+    truth. See BUGS.md BUG-029.
+    """
+    import json
+    from pathlib import Path
+
+    from sandhi.cli import build_parser
+
+    root = Path(__file__).resolve().parent.parent
+    cases = {k for k in json.loads(
+        (root / "samples" / "samples.json").read_text(encoding="utf-8")) if k != "note"}
+
+    action = next(a for a in build_parser()._subparsers._group_actions[0]
+                  .choices["controls"]._actions if a.dest == "case")
+    assert set(action.choices) == cases, (
+        f"CLI offers {sorted(action.choices)}, samples.json has {sorted(cases)}")
+
+
+def test_pixel_size_is_none_when_the_file_carries_no_georeferencing():
+    """An identity transform must read as "unknown", never as 1.0 m/px.
+
+    rasterio returns Affine.identity() for a file with no geotransform, and an
+    identity Affine is TRUTHY with a == 1.0. The old check trusted it, so a PNG
+    reported 1.0 m/px; pipeline.register then took max(src_gsd, ref_gsd) and
+    that invented 1.0 overrode the caller's explicit --gsd, making the PS's
+    source-pixel clause read 7.4x optimistic. See BUGS.md BUG-030.
+    """
+    import rasterio
+
+    from sandhi.cli import _pixel_size_m
+
+    root = Path(__file__).resolve().parent.parent
+    with rasterio.open(root / "samples" / "tmc_source.png") as src:
+        assert src.transform.is_identity, "sample is expected to be plain imagery"
+        assert bool(src.transform) is True, "identity Affine is truthy - the trap"
+        assert _pixel_size_m(src) is None
+
+
+def test_pixel_size_converts_a_geographic_crs_from_degrees_to_metres(tmp_path):
+    """transform.a is DEGREES on a SelenoGraphic GEOGCS, not metres.
+
+    This project's own products are geographic: data/interim/ohrc_7m.tif has
+    transform.a = 0.000244, which is 7.403 m/px. Reading it as metres is a
+    ~30000x error. Same unit confusion as BUG-006. See BUGS.md BUG-030.
+    """
+    import rasterio
+    from rasterio.transform import from_origin
+
+    from sandhi.cli import _pixel_size_m
+
+    deg = 0.00024413529166303002          # the real ohrc_7m.tif pixel size
+    crs = rasterio.crs.CRS.from_wkt(
+        'GEOGCS["SelenoGraphic",DATUM["Moon",SPHEROID["Moon",1737400,0]],'
+        'PRIMEM["Reference_Meridian",0],UNIT["degree",0.0174532925199433]]')
+    p = tmp_path / "geographic.tif"
+    with rasterio.open(p, "w", driver="GTiff", width=4, height=4, count=1,
+                       dtype="uint8", crs=crs,
+                       transform=from_origin(0, 0, deg, deg)) as dst:
+        dst.write(np.zeros((4, 4), np.uint8), 1)
+
+    with rasterio.open(p) as src:
+        assert _pixel_size_m(src) == pytest.approx(7.403, abs=1e-3)

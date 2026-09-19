@@ -35,6 +35,76 @@ Rules for writing entries:
 
 ## Log
 
+### BUG-030 — an identity geotransform was read as "1.0 m/px" and silently overrode the caller's `--gsd`, making the PS clause 7.4x optimistic
+
+- **Date:** 2026-09-20
+- **Status:** FIXED
+- **Area:** eval
+- **Symptom:** `sandhi register` on the committed samples, with the common grid given explicitly, reported a common grid it was never asked for and a source-pixel figure 7.4x better than the truth. Verbatim, before the fix:
+
+  ```
+  $ python -m sandhi.cli register --source samples/tmc_source.png       --reference samples/tmc_reference.png --gsd 7.403 --source-native-gsd 5.05
+  RMSE             0.579 px = 0.58 m  (common grid 1 m/px)   [SUB-PIXEL]
+    in SOURCE px   0.115 px  (source 5.05 m/px)   [SUB-PIXEL]
+  ```
+
+  `--gsd 7.403` was passed and the run says `common grid 1 m/px`. The true source figure is 0.579 x 7.403 / 5.05 = **0.849 px**; it printed **0.115**. The metrics JSON recorded `"gsd_m": 1.0`. Nothing warned.
+- **Root cause:** two faults that only bite together.
+  1. `sandhi/cli.py:31` read the GSD as `abs(src.transform.a) if src.transform`. **rasterio returns `Affine.identity()` for a file with no geotransform, and an identity Affine is truthy with `a == 1.0`** — verified: on `samples/tmc_source.png`, `bool(transform)` is `True`, `transform.a` is `1.0`, `is_identity` is `True`, `crs` is `None`. So "no georeferencing" was indistinguishable from "one metre per pixel".
+  2. `sandhi/pipeline.py:109` derives `common_gsd = max(src_gsd, ref_gsd)` and ignores the caller's `gsd_m` whenever both are present. That is **BUG-025's fix**, and it is right for real GeoTIFFs — it stops a caller getting the direction wrong. It is exactly wrong when the only honest number in the room is the caller's, because the invented 1.0 then wins.
+- **Second unit fault, found while fixing it:** `transform.a` is metres only for a CRS whose units are metres. This project's own products are not — `data/interim/ohrc_7m.tif` is a SelenoGraphic `GEOGCS` with `transform.a = 0.00024413529166303`, which is **degrees**. Read as metres that is a ~30,000x error. The correct conversion, `radians(0.000244135) * 1737400`, gives **7.4028 m/px** — the expected Kaguya figure, which is how the fix is checkable rather than merely plausible. Same class as BUG-006.
+- **Why it was never caught:** no test exercises `sandhi/cli.py` at all. `tests/test_pipeline.py` reads its images with `cv2` and calls `pipeline.register(...)` directly with an explicit `gsd_m`, so `_read` is bypassed entirely. The bug lives in the gap between the tested library and the untested entry point — and the entry point is what a user runs.
+- **Fix:** `sandhi/cli.py` — new `_pixel_size_m(src)`, used by `_read`. It returns `None` unless the dataset is genuinely georeferenced (`crs is not None`, transform present and **not** identity), and converts degrees to metres via `config.MOON_RADIUS_M` when `crs.is_geographic`. Verified after the fix: the same command reports `common grid 7.403 m/px` and `in SOURCE px 0.849 px`, with matching unchanged at 3073 matches / 2971 inliers / coverage 0.89 — the fix moves bookkeeping, not the matcher. `samples/tmc_source.png` now yields `None` and `data/interim/ohrc_7m.tif` yields `7.403`.
+- **Bonus, a dead branch came alive:** `sandhi/cli.py`'s `in SOURCE px unknown - pass --source-gsd and --reference-gsd` was unreachable, because the invented 1.0 always made the metric computable. With no GSD supplied the command now prints that line instead of a confidently wrong number.
+- **Constraint on any future change here:** the fix must **refuse to guess and say so**, never infer the ratio from the imagery. Blind scale estimation is banned (ROADMAP "Deliberately not planned", NEXTSTEP "Avoid revisiting", BUG-010). Reading a declared GSD from metadata is allowed; recovering one from pixels is not, and the two look similar from outside.
+- **Check:** `tests/test_units.py::test_pixel_size_is_none_when_the_file_carries_no_georeferencing` asserts the identity transform is truthy *and* that `_pixel_size_m` still returns None; `tests/test_units.py::test_pixel_size_converts_a_geographic_crs_from_degrees_to_metres` builds a 4x4 GeoTIFF on the real SelenoGraphic WKT at the real pixel size and asserts 7.403 m. Verified load-bearing: reinstating the one-line `abs(src.transform.a) if src.transform` makes both fail, and restoring the fix makes both pass.
+
+### BUG-029 — `sandhi controls --case tmc` was rejected, so the packaged CLI could not gate the headline case
+
+- **Date:** 2026-09-19
+- **Status:** FIXED
+- **Area:** eval
+- **Symptom:** `python -m sandhi.cli controls --case tmc` exits with `argument --case: invalid choice: 'tmc' (choose from 'kaguya', 'ohrc')`. TMC-2 is the case the README leads with and the only one that meets the PS's source-pixel clause, and the packaged entry point refused to run the control gate on it.
+- **Root cause:** `sandhi/cli.py:175` hard-coded `choices=["kaguya", "ohrc"]`, a hand-kept subset that was never updated when tmc was added. Everything the subcommand needs was already in place: `samples/samples.json` carries a `tmc` entry alongside `kaguya` and `ohrc`, `sandhi/cli.py:_sample` reads that file by key and never consults the choices list, and `tests/test_pipeline.py:155` already parametrises `test_control_gate_passes` over `["kaguya", "ohrc", "tmc"]`. So the gate worked on tmc in the test suite and was unreachable from the CLI — a duplicated list of cases, out of step with its own source of truth.
+- **Why it matters beyond a usability nit:** the project's rule is that no matching number is written down until it passes the gate. A reviewer handed `sandhi controls --case <x>` as the way to check that could verify the two cases that do NOT meet the source-pixel clause and not the one that does.
+- **Fix:** `sandhi/cli.py:175` — `choices=["kaguya", "ohrc", "tmc"]`, with a comment saying the list must track `samples/samples.json` rather than be maintained separately.
+- **Check:** `tests/test_units.py::test_controls_cli_offers_every_bundled_sample` asserts the `controls --case` choices equal the keys of `samples/samples.json`, so the two cannot drift again. Verified load-bearing: reinstating `choices=["kaguya", "ohrc"]` makes it fail on the missing `'tmc'`, and restoring the fix makes it pass. End to end, `python -m sandhi.cli controls --case tmc` runs from committed samples and prints PASS on all four controls — real pair n=3417 dx +21.50 dy +2.46; roll +15 raw moved dx -14.99 against a wanted -15; noise 102 vs 3417 (33.5x); constant 0. Verified 2026-09-19.
+- **Note on the split:** those are the **committed sample crop** figures. README's control table for TMC-2 reports the **full product**: 3435 real-pair matches and 33.7x noise rejection, with the same dx +21.50 / dy +2.46. The two agree on the recovered offset to 0.01 px and differ only in match count, which is the expected effect of the smaller crop — but the numbers are not interchangeable and neither should be quoted without naming which produced it.
+
+### BUG-028 — `ground_gsd()` takes a median over a quantised backplane and reads 18.65% high
+
+- **Date:** 2026-09-19
+- **Status:** OPEN
+- **Area:** projection
+- **Symptom:** `outputs/iirs_vs_m3.json` records `iirs_gsd: 99.06` for a product whose PDS4 label declares 85.08 m. A 16% disagreement between a product's label and its own geometry is the OHRC pattern (label 0.26 against a measured 0.3060 x 0.3225), so it reads as a second instance of it — and it is not. **Here the label is right and the measurement is wrong.**
+- **Root cause:** `scripts/iirs_vs_m3.py:89` `ground_gsd()` returns `np.median` of the haversine distance between *adjacent* LOC backplane centres. The IIRS LOC backplane stores duplicated coordinates: measured over the full 12109 x 250 plane, **16.06% of adjacent sample pairs are exactly 0 m apart**. Total swath width is unaffected by where the duplicates fall, so the non-duplicate pairs must absorb the whole width and each reads high. The median then lands on those inflated pairs and misses the true sampling by the duplicate fraction. Measured on the real file:
+
+  | Statistic | Value |
+  |---|---|
+  | `median(adjacent)` — what the function returns | **100.24 m** |
+  | end-to-end swath width / 249 intervals | **84.48 m** |
+  | sum-of-steps / 249 intervals | **84.48 m** |
+  | along-track, centre column, median | 81.47 m |
+  | label `IIRS_GSD_M = 85.08` | **+0.71%** against 84.48 |
+
+  The end-to-end and sum-of-steps routes agree to the centimetre, which is the collinearity check: the samples lie on a line, so the zeros cancel exactly on any end-to-end measure and only the median is fooled. Cross- against along-track is **84.48 vs 81.47, a 3.6% anisotropy**, not the 16-23% the raw median suggests.
+- **Why no published number moved:** `scripts/iirs_vs_m3.py:301` takes `common = max(ii_gsd, m3_gsd)` and M3's figure was the larger one, so the inflated IIRS value was never the operative resolution. The bug is latent, not expressed. It fires the first time IIRS is the coarser side of a pair, or the first time `scale_ratio` (`scripts/iirs_vs_m3.py:326`, `m3_gsd / ii_gsd`) is quoted — that ratio is currently wrong by 18.65%.
+- **Secondary consequence:** the same function is the only GSD measurement for M3, which is why `outputs/iirs_vs_m3.json` says `m3_gsd: 149.74` while `outputs/m3_vs_kaguya.json` says `146.86`. Same function, different line ranges, both biased.
+- **Fix:** OPEN. Replace the median with the end-to-end width divided by the interval count — `arc(lat[:,0], lon[:,0], lat[:,-1], lon[:,-1]) / (n-1)`, taken per line and then averaged — which is duplicate-proof by construction and was verified above to agree with sum-of-steps. Then re-run `scripts/iirs_vs_m3.py` and correct `iirs_gsd`, `m3_gsd` and `scale_ratio` in `outputs/iirs_vs_m3.json`. Neither the IIRS↔Kaguya nor the M3↔Kaguya published results depend on it.
+- **Note against a wrong fix:** do NOT conclude from this that `IIRS_GSD_M = 85.08` at `scripts/iirs_vs_kaguya.py:104` should be replaced with a measured value. It is accurate to 0.71% and `project()` fits the inverse map from the real lat/lon anyway, so the constant only sets output sampling. Changing it to the raw median would inject an 18.65% scale error into the IIRS path — the opposite of the OHRC lesson it superficially resembles.
+- **Check:** none yet. The check is an assertion inside `ground_gsd` that the returned value agrees with the end-to-end width over the same line to within a few percent; on this backplane the two differ by 18.65% and it fails.
+
+### BUG-027 — the one-command demo reports TMC-2 as NOT sub-pixel while the README reports it as sub-pixel
+
+- **Date:** 2026-09-19
+- **Status:** OPEN
+- **Area:** eval
+- **Symptom:** the README's scorecard marks "sub-pixel accuracy of source image" **complete on TMC-2** at `rmse_source_px` **0.872**. The command the README tells a reviewer to run, `python scripts/demo.py --case tmc`, writes `outputs/demo_tmc.json` with `rmse_source_px` **1.031** and `sub_pixel_source: false`, and prints that verdict onto the figure. Both files are committed, both are full-product runs of the same window, and nothing in either says why they disagree.
+- **Root cause:** not a matching difference. Both runs produce **exactly 3085 matches** — the matching, normalisation and refinement are identical. They differ only at the fit. `scripts/demo.py:23` imports `fit` and `register_pair` from `scripts/register.py`, which has no held-out model selection; `outputs/tmc2_metrics.json` came through `sandhi/pipeline.py`, which selects `affine` (held-out median 0.515 against similarity's 0.699) and lands at 0.993 inlier ratio and 0.595 grid px against the demo's 0.765 and 0.704. CLAUDE.md already recorded that model selection is in the package and not in `scripts/register.py`; what was never followed through is that **`demo.py` is the reviewer-facing surface and it is wired to the weaker of the two**, so the project's shop window contradicts its own headline claim on the single clause the problem statement is most explicit about.
+- **Why it stayed invisible:** the gap only opens on a case where model selection changes the verdict rather than the value. On Kaguya, source and reference share a grid, so the source-pixel figure equals the grid figure and similarity is the right model anyway. On OHRC the clause fails under both paths (reference-limited, BUG-025), so the disagreement changes nothing a reader would notice. TMC-2 is the only committed case that sits on both sides of 1.0 depending on the path — and it is also the case the README leads with.
+- **Fix:** OPEN. The change is to route `demo.py` through `sandhi.pipeline.register()`, but that re-runs every committed figure and every number under them, so it must go through `scripts/remeasure.py`'s four controls before any output is replaced. Until it does, the honest interim is that `demo.py`'s figures carry the path they used, the way they already carry `[sample]` when they use a committed crop.
+- **Check:** none yet. The check that would have caught it is a test asserting that, for each case in `samples/samples.json`, the committed `outputs/demo_*.json` and the corresponding reported metrics JSON agree on `sub_pixel_source` — a verdict-level comparison, not a value-level one, so it does not pin either path's numbers.
+
 ### BUG-026 — dependency lists named the wrong modules, and a script exited 0 with no output when its input was missing
 
 - **Date:** 2026-09-11
