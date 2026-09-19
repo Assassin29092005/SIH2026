@@ -162,7 +162,8 @@ def build(doc: Document) -> None:
         ["Sun angle", "Up to opposite illumination", "The Moon has no atmosphere, so no fill "
          "light. Shading dominates, and shading inverts. A crater lit from the east is "
          "near pixel-identical to a dome lit from the west. Two Kaguya images of "
-         "**identical ground** correlate at **-0.560**."],
+         "**identical ground** correlate at **-0.560** (tile N18E009N15E012SC, "
+         "window (5888,5888), 512x512 -- the value is window-specific)."],
         ["Resolution", "Up to **28.5x**", "A feature that is a hundred pixels across in one "
          "image is three in the other."],
         ["Sensor", "Camera vs spectrometer", "Different physics recording the same terrain."],

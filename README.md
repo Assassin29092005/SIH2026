@@ -45,8 +45,8 @@ Verified by cloning this repository fresh, with no Chandrayaan-2 archive present
 ```bash
 python scripts/demo.py --list     # says "committed sample" or "full data" per case
 python scripts/check_env.py       # dependencies + GDAL planetary drivers
-pytest -m "not slow"              # 25 unit tests, ~3 s, no imagery or network
-pytest                            # all 36, including 11 end-to-end on samples/
+pytest -m "not slow"              # 28 unit tests, ~3 s, no imagery or network
+pytest                            # all 39, including 11 end-to-end on samples/
 ```
 
 **Optional — the full products.** Needed only to reproduce the full-resolution rows. Kaguya is a direct download; Chandrayaan-2 needs a free [PRADAN](https://pradan.issdc.gov.in/ch2/) account. Archives are read in place through GDAL `/vsizip/` and must **not** be extracted.
@@ -62,7 +62,7 @@ python scripts/ch2_footprints.py --pick tmc --at-lat 0  # rank before downloadin
 
 ## The problem, in one number
 
-Two Kaguya Terrain Camera images of **identical terrain**, one shot in lunar morning and one in evening, correlate at **−0.560**.
+Two Kaguya Terrain Camera images of **identical terrain**, one shot in lunar morning and one in evening, correlate at **−0.560** (tile `N18E009N15E012SC`, window (5888,5888), 512×512 — the figure is window-specific: `python scripts/triple_io.py` runs a different tile and reports −0.627, and the committed 1024² sample crop gives −0.14).
 
 Not weakly. *Negatively.* Morning light arrives from the east and evening light from the west, so slopes lit at dawn sit in shadow at dusk. The Moon has no atmosphere and therefore no diffuse fill light, which means a crater lit from the east is close to pixel-identical to a **dome** lit from the west.
 

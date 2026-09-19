@@ -3,7 +3,9 @@
 The Moon has no atmosphere, so no fill light. Surface brightness is dominated by
 shading rather than albedo, and shading inverts when the sun moves: a crater lit
 from the east is close to pixel-identical to a dome lit from the west. Two
-Kaguya images of identical ground, morning versus evening, correlate at -0.560.
+Kaguya images of identical ground, morning versus evening, correlate at -0.560
+(tile N18E009N15E012SC, window (5888,5888), 512x512; other windows range
+-0.45 to -0.72, so quote the window with the number).
 
 Local contrast normalisation is what survived controlled measurement. Subtract a
 local mean, divide by a local standard deviation, and match the residual

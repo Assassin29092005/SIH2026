@@ -50,6 +50,7 @@ All verified reachable as of 2026-08-22.
 | Reference imagery | LROC NAC (~0.5 m/px), WAC (~100 m/px) | [LROC downloads](https://lroc.im-ldi.com/images/downloads), [QuickMap](https://quickmap.lroc.im-ldi.com/), PDS ODE |
 | Topography | LOLA + GLD100 DEM (~118 m/px) | PDS Geosciences Node / USGS Astrogeology |
 | Cross-illumination pairs | Kaguya/SELENE Terrain Camera **morning and evening global mosaics** | JAXA SELENE archive / USGS Astrogeology |
+| Scale-envelope + spectrometer control | Chandrayaan-1 **M3** (~147 m/px imaging spectrometer) | PDS ODE, no login. Registers against Kaguya at **19.84x**, gated — the largest ratio demonstrated here, and it is what refuted the instrument-pairing explanation for the IIRS failure. |
 
 The Kaguya TC morning/evening mosaics are the same terrain, globally, under opposite illumination, already co-registered. Free, real, pre-built cross-illumination training data. This is the highest-value dataset in the list — the PS's own dataset field hints at it (truncated `SE`).
 
@@ -123,7 +124,11 @@ OHRC coverage is sparse and target-of-opportunity, so there is not enough of it 
 
 Report stratified by **|Δsun azimuth|** and **scale ratio**. The stratified table is the deliverable that shows where classical methods collapse and ours does not.
 
-- Reprojection RMSE, in source pixels, against geometric GT
+- Reprojection RMSE, **in source-product pixels** — `rmse_source_px`, not
+  `rmse_px`. The two differ by the scale ratio and the gap decides the PS
+  clause: 0.513 common-grid px at 7.403 m is 0.75 TMC-2 pixels but **14.6
+  OHRC pixels**. Both are written to every metrics JSON; neither is reported
+  alone. See BUGS.md BUG-025.
 - Inlier ratio at 1px and 3px thresholds
 - Inlier match count
 - Success rate — fraction of pairs under 2px
@@ -177,13 +182,13 @@ sandhi survey --site equatorial
 ### Tests
 
 ```bash
-pytest                     # all 34
-pytest -m "not slow"       # 23 unit tests, ~3 s, no imagery or network
+pytest                     # all 39
+pytest -m "not slow"       # 28 unit tests, ~3 s, no imagery or network
 pytest -m slow             # 11 end-to-end on samples/, minutes (runs LoFTR on CPU)
 pytest tests/test_pipeline.py::test_control_gate_passes
 ```
 
-**`test_control_gate_passes` and `test_gate_rejects_a_matcher_that_ignores_its_input` are the load-bearing tests.** The first runs the four-control gate on both bundled cases; the second feeds the gate a matcher that returns a fixed correspondence while ignoring its inputs, and asserts the gate rejects it. If that ever passes, the gate is broken and every number downstream is unverified.
+**`test_control_gate_passes` and `test_gate_rejects_a_matcher_that_ignores_its_input` are the load-bearing tests.** The first runs the four-control gate on all three bundled cases (kaguya, ohrc, tmc); the second feeds the gate a matcher that returns a fixed correspondence while ignoring its inputs, and asserts the gate rejects it. If that ever passes, the gate is broken and every number downstream is unverified.
 
 **End-to-end demo** — the entry point. Falls back to `samples/` (3 MB of committed real imagery) when the full products are absent, so it works from a fresh clone. ~20 s per case on CPU.
 
@@ -205,6 +210,9 @@ python scripts/demo.py --list        # whether each case will use full data or t
 | `python scripts/viewpoint.py --self-check` | selector does not over-pick homography on nadir pairs | Kaguya |
 | `python scripts/ohrc_project.py` | OHRC geolocation polynomial fit residual < 5 px | CH-2 |
 | `python scripts/tmc_vs_kaguya.py --lat 0.5 --size 1536` | TMC-2 registers against Kaguya, all four controls | CH-2 + Kaguya |
+| `python scripts/iirs_vs_kaguya.py --controls` | the IIRS negative result and its three controls, incl. 11.49x | CH-2 + Kaguya |
+| `python scripts/baselines.py --case all` | every baseline through the same gate | Kaguya + CH-2 |
+| `python scripts/offset_origin.py --chunks 6` | prints per-axis sigma beside the verdict (BUG-022 guard) | CH-2 + Kaguya |
 
 **Measurement and evaluation**
 
@@ -226,6 +234,7 @@ python scripts/kaguya.py fetch  --site equatorial       # morning + evening + DE
 python scripts/ch2_footprints.py --summary              # where OHRC/TMC-2 actually point
 python scripts/ch2_footprints.py --pick tmc --at-lat 0  # rank candidates before downloading
 python scripts/ohrc_project.py --gsd 7.403 --out data/interim/ohrc_7m.tif
+python scripts/m3.py fetch --id M3G20090204T234545      # Chandrayaan-1 M3, no login
 ```
 
 ## Architecture
@@ -234,7 +243,7 @@ python scripts/ohrc_project.py --gsd 7.403 --out data/interim/ohrc_7m.tif
 
 `kaguya.py` / `ch2_io.py` / `ohrc_project.py` (ingest) → `triple_io.py` (aligned windows) → `remeasure.build_raw_hp` (normalise) → `register.py` (match, refine, fit, write) → `demo.py` (render).
 
-Chandrayaan-2 archives are read **in place through GDAL `/vsizip/`** — never extracted. `data/raw/` holds ~7 GB (ch2 2.1 GB, kaguya 1.7 GB, nac 3.0 GB) and is gitignored; `samples/` (3 MB) and `outputs/` (1.4 MB) are committed.
+Chandrayaan-2 archives are read **in place through GDAL `/vsizip/`** — never extracted. `data/raw/` holds ~13 GB (ch2 6.8 GB including the 5.1 GB IIRS cube, kaguya 2.6 GB, nac 3.0 GB, m3 832 MB) and is gitignored; `samples/` (5 MB) and `outputs/` (3.8 MB) are committed. `deck/` holds the presentation drafts and is gitignored — **nothing generates it**, unlike `docs/`, which `scripts/make_docs.py` regenerates from `outputs/*.json`.
 
 ### Package vs scripts
 
@@ -253,9 +262,24 @@ Chandrayaan-2 archives are read **in place through GDAL `/vsizip/`** — never e
 | `viewpoint.py` | Transform-model selection on held-out residual; obliquity ladder. |
 | `photometric.py` | DEM renderer. Retained as a physics result and illumination-recovery tool — **not** used for matching. |
 | `triple_io.py`, `ch2_io.py` | Readers. `pixel_latlon()` exists because the transform is in projected metres, not degrees (BUG-006). |
-| `demo.py` | The only thing that renders. Everything else prints numbers. |
+| `demo.py` | The only thing that renders. Everything else prints numbers. See trap 0 — it runs the pre-model-selection path. |
+| `baselines.py` | SIFT / ASIFT / ORB / DISK+LightGlue / phase correlation through the same gate and metrics. |
+| `offset_origin.py` | Separates Chandrayaan-2 geolocation error from our projection error. Answered ROADMAP 1.1: it is CH-2's, three independent ways. |
+| `m3.py`, `iirs_vs_m3.py`, `iirs_vs_kaguya.py` | Chandrayaan-1 M3 fetch, and the IIRS investigation. M3 ↔ Kaguya at 19.84x passes the gate; IIRS registers against nothing. |
+| `adopt_check.py` | The bar a fine-tuned checkpoint must clear before it is adopted. Rejected both runs. |
+| `make_docs.py` | Regenerates `docs/SANDHI_Technical_Report.docx` from `outputs/*.json`. The pattern the deck still lacks. |
 
-### Two traps
+### Three traps
+
+**0. `demo.py` runs `scripts/register.py`, not the package.** It imports `fit`,
+`register_pair`, `BUCKET_GRID` and `uniformity` from `register` and
+`build_raw_hp` from `remeasure`, so the one command a reviewer runs skips the
+model selection the package does by default. The cost is visible in the
+committed outputs: on the same full TMC-2 data, `outputs/demo_tmc.json` reports
+`rmse_source_px` **1.031 — not sub-pixel**, while `outputs/tmc2_metrics.json`
+(package path, `model_kind: affine`) reports **0.872 — sub-pixel**. Both are
+honest; the demo is simply the weaker path. Rewiring it means re-running and
+re-gating every committed figure, so it is a deliberate task, not a drive-by.
 
 **1. The superseded modules are still imported.** `ablation.py`, `dense_match.py` and `scale_pipeline.py` carry SUPERSEDED banners because their *results* were retracted (BUG-011), but current code imports their *helpers*:
 
