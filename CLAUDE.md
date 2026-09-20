@@ -182,8 +182,8 @@ sandhi survey --site equatorial
 ### Tests
 
 ```bash
-pytest                     # all 39
-pytest -m "not slow"       # 28 unit tests, ~3 s, no imagery or network
+pytest                     # all 41
+pytest -m "not slow"       # 30 unit tests, ~3 s, no imagery or network
 pytest -m slow             # 11 end-to-end on samples/, minutes (runs LoFTR on CPU)
 pytest tests/test_pipeline.py::test_control_gate_passes
 ```

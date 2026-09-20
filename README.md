@@ -45,8 +45,8 @@ Verified by cloning this repository fresh, with no Chandrayaan-2 archive present
 ```bash
 python scripts/demo.py --list     # says "committed sample" or "full data" per case
 python scripts/check_env.py       # dependencies + GDAL planetary drivers
-pytest -m "not slow"              # 28 unit tests, ~3 s, no imagery or network
-pytest                            # all 39, including 11 end-to-end on samples/
+pytest -m "not slow"              # 30 unit tests, ~3 s, no imagery or network
+pytest                            # all 41, including 11 end-to-end on samples/
 ```
 
 **Optional — the full products.** Needed only to reproduce the full-resolution rows. Kaguya is a direct download; Chandrayaan-2 needs a free [PRADAN](https://pradan.issdc.gov.in/ch2/) account. Archives are read in place through GDAL `/vsizip/` and must **not** be extracted.
