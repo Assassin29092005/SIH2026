@@ -86,13 +86,35 @@ def m3_wavelengths(rfl: Path) -> np.ndarray:
                      if x.strip()])
 
 
-def ground_gsd(lat: np.ndarray, lon: np.ndarray) -> float:
-    """Metres per pixel across track, by arc length between adjacent centres."""
-    p1, p2 = np.radians(lat[:, :-1]), np.radians(lat[:, 1:])
-    dl = np.radians(lon[:, 1:] - lon[:, :-1])
+def _arc_m(lat1, lon1, lat2, lon2):
+    """Great-circle distance on the lunar sphere, in metres."""
+    p1, p2 = np.radians(lat1), np.radians(lat2)
+    dl = np.radians(lon2 - lon1)
     a = np.sin((p2 - p1) / 2) ** 2 + np.cos(p1) * np.cos(p2) * np.sin(dl / 2) ** 2
-    d = 2 * MOON_RADIUS_M * np.arcsin(np.sqrt(np.clip(a, 0, 1)))
-    return float(np.median(d))
+    return 2 * MOON_RADIUS_M * np.arcsin(np.sqrt(np.clip(a, 0, 1)))
+
+
+def ground_gsd(lat: np.ndarray, lon: np.ndarray) -> float:
+    """Metres per pixel across track: swath width divided by its intervals.
+
+    NOT the median of adjacent-centre distances, which is what this used to be
+    and which reads high on a quantised backplane. IIRS's LOC plane stores
+    duplicated coordinates -- 16.06% of adjacent sample pairs are exactly 0 m
+    apart -- and because the swath width is fixed regardless of where the
+    duplicates fall, the non-duplicate pairs each absorb more of it and read
+    high. The median then lands on those and misses the true sampling by the
+    duplicate fraction: 100.24 m against a true 84.48. See BUGS.md BUG-028.
+
+    End to end is duplicate-proof by construction: the zeros cancel because the
+    samples are collinear. Verified on the real IIRS backplane, where
+    `sum-of-steps / n` and `end-to-end / n` agree to the centimetre at 84.48 m,
+    and the PDS4 label's 85.08 is then correct to 0.71%.
+    """
+    n = lat.shape[1] - 1
+    if n < 1:
+        raise ValueError("need at least two samples across track")
+    per_line = _arc_m(lat[:, 0], lon[:, 0], lat[:, -1], lon[:, -1]) / n
+    return float(np.mean(per_line))
 
 
 def project(band, lat, lon, gsd_m, ignore=None, grid=None):
@@ -234,6 +256,45 @@ def m3_vs_kaguya(obs, nm, tile_lat, gate=True) -> dict:
     return out
 
 
+def self_check() -> int:
+    """Assert ground_gsd survives a quantised backplane. No data needed.
+
+    Builds a coordinate line with the duplication IIRS's LOC plane actually
+    has -- every sixth sample repeating its neighbour -- at a known true
+    spacing, and asserts the end-to-end measure recovers it while the old
+    median does not. Coordinates only: no imagery is synthesised. BUG-028.
+    """
+    # The swath width is fixed by the optics; what the backplane loses is
+    # coordinate PRECISION. Quantising evenly-spaced samples therefore creates
+    # duplicates AND inflates every surviving step, which is the whole
+    # mechanism -- a fixture that merely drops samples shortens the swath and
+    # reproduces nothing.
+    n_samples = 250
+    true_spacing_deg = 0.0028                       # ~84.9 m at the equator
+    quantum_deg = true_spacing_deg * 1.6            # coarser than the sampling
+
+    exact = np.linspace(0.0, true_spacing_deg * (n_samples - 1), n_samples)
+    lon = (np.round(exact / quantum_deg) * quantum_deg)[None, :]
+    lat = np.zeros_like(lon)
+
+    expected = np.radians(lon[0, -1]) * MOON_RADIUS_M / (n_samples - 1)
+    got = ground_gsd(lat, lon)
+    assert abs(got - expected) < 0.05, f"end-to-end gave {got:.2f}, want {expected:.2f}"
+
+    d = _arc_m(lat[:, :-1], lon[:, :-1], lat[:, 1:], lon[:, 1:])
+    dup_fraction = float((d == 0).mean())
+    assert dup_fraction > 0.1, f"fixture is not quantised enough ({dup_fraction:.3f})"
+    old = float(np.median(d))
+    assert old > got * 1.1, (
+        f"the median must read high on this fixture, got {old:.2f} vs {got:.2f} "
+        "- if this fails the fixture no longer reproduces BUG-028")
+
+    print(f"OK - {dup_fraction*100:.0f}% duplicated samples")
+    print(f"     end-to-end {got:.2f} m/px (true {expected:.2f})")
+    print(f"     old median {old:.2f} m/px, {100*(old-got)/got:+.1f}% - the bug")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--wavelength", type=float, default=1504.0)
@@ -245,7 +306,12 @@ def main() -> int:
                     metavar=("S", "N"), help="latitude band for --vs-kaguya")
     ap.add_argument("--no-gate", action="store_true")
     ap.add_argument("--out", default="outputs/iirs_vs_m3.json")
+    ap.add_argument("--self-check", action="store_true",
+                    help="assert ground_gsd on a quantised fixture; needs no data")
     args = ap.parse_args()
+
+    if args.self_check:
+        return self_check()
 
     if args.vs_kaguya:
         row = m3_vs_kaguya(args.obs, args.wavelength, tuple(args.tile_lat),

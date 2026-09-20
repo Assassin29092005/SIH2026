@@ -5,6 +5,7 @@ mis-indexed array produces plausible output rather than a crash. Several of them
 encode bugs that actually happened; see BUGS.md.
 """
 
+import json
 from pathlib import Path
 
 import numpy as np
@@ -374,3 +375,52 @@ def test_pixel_size_converts_a_geographic_crs_from_degrees_to_metres(tmp_path):
 
     with rasterio.open(p) as src:
         assert _pixel_size_m(src) == pytest.approx(7.403, abs=1e-3)
+
+
+@pytest.mark.parametrize("case,reported", [("tmc", "tmc2_metrics.json")])
+def test_demo_and_reported_metrics_agree_on_the_subpixel_verdict(case, reported):
+    """The demo must not contradict the result the README leads with.
+
+    `demo.py` used to call `scripts/register.py`, which hardcodes a 4-DOF
+    similarity fit, while the reported figures came through the package, which
+    selects on held-out residual. Same data, same 3085 matches, opposite
+    verdicts on the PS's headline clause: 1.031 source px and NOT sub-pixel
+    from the demo against 0.872 and sub-pixel from the package. A reviewer
+    running the one documented command saw the failing number. See BUG-027.
+
+    This compares the VERDICT, not the value, so it pins neither path's
+    numbers and stays true if either is re-measured.
+    """
+    root = Path(__file__).resolve().parent.parent
+    demo_p = root / "outputs" / f"demo_{case}.json"
+    rep_p = root / "outputs" / reported
+    if not (demo_p.exists() and rep_p.exists()):
+        pytest.skip("committed metrics are not present")
+
+    demo = json.loads(demo_p.read_text(encoding="utf-8"))
+    rep = json.loads(rep_p.read_text(encoding="utf-8"))
+    for f in ("sub_pixel_source", "sub_pixel"):
+        assert demo.get(f) == rep.get(f), (
+            f"{demo_p.name} says {f}={demo.get(f)} while {rep_p.name} says "
+            f"{rep.get(f)} - the demo and the reported result disagree on a verdict")
+
+
+def test_every_demo_metrics_file_states_the_source_pixel_figure():
+    """No committed demo result may omit the unit the PS actually asks for.
+
+    `rmse_px` alone is unanswerable: on OHRC 0.513 grid px is 14.6 pixels of
+    the 0.26 m product. Absent rather than defaulted is the rule (BUG-025), so
+    the field has to be present and has to differ from the grid figure
+    wherever the source and the common grid differ.
+    """
+    root = Path(__file__).resolve().parent.parent
+    files = sorted((root / "outputs").glob("demo_*.json"))
+    if not files:
+        pytest.skip("no committed demo metrics")
+    for p in files:
+        m = json.loads(p.read_text(encoding="utf-8"))
+        assert "rmse_source_px" in m, f"{p.name} has no source-pixel figure"
+        assert "source_gsd_m" in m, f"{p.name} does not say what the source GSD was"
+        ratio = m["gsd_m"] / m["source_gsd_m"]
+        assert m["rmse_source_px"] == pytest.approx(m["rmse_px"] * ratio, rel=1e-6), (
+            f"{p.name}: source-pixel figure is not the grid figure times the scale ratio")

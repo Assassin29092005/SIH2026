@@ -20,12 +20,9 @@ import cv2  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
-from register import (  # noqa: E402
-    BUCKET_GRID,
-    fit,
-    register_pair,
-    uniformity,
-)
+from sandhi import pipeline  # noqa: E402
+
+from register import BUCKET_GRID  # noqa: E402
 from remeasure import build_raw_hp  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -174,10 +171,13 @@ def load_tmc(lat=0.5, size=1536):
     Chandrayaan-2 data at survey scale rather than on a single targeted strip.
 
     Like OHRC, the source arrives resampled: TMC-2 is 5.05 m/px and Kaguya
-    7.403 m/px, so the source is brought to the reference GSD here rather than
-    inside the demo, because `register_pair` takes no GSD arguments. The ratio
-    is read from the products (1.466), never estimated -- see BUG-010, and
-    BUG-020 for why the non-integer ratio needed a real resampler.
+    7.403 m/px, so the source is brought to the reference GSD here, in the
+    loader that knows both products' GSDs, rather than inside `run()`. The
+    ratio is read from the products (1.466), never estimated -- see BUG-010,
+    and BUG-020 for why the non-integer ratio needed a real resampler.
+
+    `run()` therefore passes `gsd_m` and `source_native_gsd` to the package but
+    NOT `src_gsd`/`ref_gsd`, which would resample a second time.
     """
     import rasterio
     from sandhi.pipeline import resample
@@ -230,7 +230,22 @@ def run(case: str, out_path: Path):
     src, ref, gsd = data["src"], data["ref"], data["gsd"]
     print(f"{data['title']}\n  {data['sub']}\n  matching...")
 
-    result = register_pair(src, ref)
+    # Through the PACKAGE, not scripts/register.py. The two differ only at the
+    # fit -- scripts/register.py hardcodes estimateAffinePartial2D (4-DOF
+    # similarity) while the package selects on held-out residual -- and on
+    # TMC-2 that difference decided the PS's headline clause: identical 3085
+    # matches, but 1.031 source px and NOT sub-pixel through the old path
+    # against 0.872 and sub-pixel through this one. The demo is the surface a
+    # reviewer runs, so it must not be the weaker of the two. See BUG-027.
+    #
+    # `src` and `ref` are ALREADY on the common grid -- each loader resamples,
+    # because it is the loader that knows the products' GSDs. So pass gsd_m and
+    # source_native_gsd only: handing over src_gsd/ref_gsd as well would
+    # resample a second time. `source_native_gsd` is what keeps OHRC honest --
+    # without it the 0.26 m product is scored against the 7.403 m grid it was
+    # projected onto and its limit silently disappears (BUG-025).
+    result = pipeline.register(src, ref, gsd_m=gsd,
+                               source_native_gsd=data["source_gsd"])
     if result is None:
         print("  no model could be fitted")
         return 1
@@ -238,12 +253,12 @@ def run(case: str, out_path: Path):
     pa, pb = result["pa"], result["pb"]
     f = result["fit"]
     inl = f["inliers"]
-    cov, ent = uniformity(pa[inl], src.shape)
-    rmse = f["rmse"]
+    metrics = dict(result["metrics"])
+    cov, ent = metrics["coverage"], metrics["entropy"]
+    rmse = metrics["rmse_px"]
 
     a8, b8 = build_raw_hp(src, None, None), build_raw_hp(ref, None, None)
-    warped = cv2.warpAffine(stretch8(src).astype(np.float32), f["model"],
-                            (ref.shape[1], ref.shape[0]), flags=cv2.INTER_CUBIC)
+    warped = pipeline.warp(stretch8(src).astype(np.float32), result)
 
     fig = plt.figure(figsize=(16, 9), facecolor="#12151a")
     gs = fig.add_gridspec(2, 3, height_ratios=[1.15, 1], hspace=0.16, wspace=0.12)
@@ -274,18 +289,13 @@ def run(case: str, out_path: Path):
     ax.set_axis_off()
 
     # RMSE lives on the COMMON grid; the PS asks for accuracy in the source
-    # product's own pixels. Both are reported -- see BUG-025.
-    src_gsd = data["source_gsd"]
-    rmse_src = rmse * gsd / src_gsd
-    metrics = {
-        "match_count": int(len(pa)), "inlier_count": int(inl.sum()),
-        "inlier_ratio": float(inl.mean()), "rmse_px": float(rmse),
-        "rmse_m": float(rmse * gsd), "sub_pixel": bool(rmse < 1.0),
-        "gsd_m": float(gsd), "source_gsd_m": float(src_gsd),
-        "rmse_source_px": float(rmse_src),
-        "sub_pixel_source": bool(rmse_src < 1.0),
-        "coverage": float(cov), "entropy": float(ent),
-    }
+    # product's own pixels. Both come from the package's own metric block --
+    # computed once, by the code the tests gate, rather than recomputed here.
+    # See BUG-025 for why the two figures are never reported apart.
+    src_gsd = metrics["source_gsd_m"]
+    rmse_src = metrics["rmse_source_px"]
+    metrics["model_kind"] = f["kind"]
+    metrics["stages"] = result.get("stages", {})
     verdict = "SUB-PIXEL" if metrics["sub_pixel"] else f"{rmse:.2f} px"
     src_verdict = ("SUB-PIXEL in source px" if metrics["sub_pixel_source"]
                    else f"{rmse_src:.1f} source px - limited by the "
