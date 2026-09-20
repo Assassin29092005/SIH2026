@@ -165,8 +165,16 @@ Two surfaces, and they are not interchangeable:
 
 ```bash
 pip install -e ".[dev]"              # editable install + pytest
+pip install -e ".[dev,docs]"         # also the deliverable generators (python-docx, python-pptx)
 python scripts/check_env.py          # deps + GDAL PDS4/ISIS3/PDS drivers + SIFT. Run first on a new machine.
 ```
+
+**The `docs` extra is not optional for `make_docs.py` / `make_deck.py`.** Both
+are absent from the core install on purpose — neither is needed to run the
+pipeline or the tests — but a fresh clone without the extra cannot build the
+report or the deck. CI installs it. See BUGS.md BUG-031, which is BUG-026
+repeating: a dependency that only ever worked because the dev machine already
+had it.
 
 ### The package
 

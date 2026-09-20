@@ -42,7 +42,13 @@ import subprocess
 import sys
 from pathlib import Path
 
-from pptx import Presentation
+try:
+    from pptx import Presentation
+except ModuleNotFoundError:                      # pragma: no cover
+    raise SystemExit(
+        "make_deck.py needs python-pptx, which is an optional dependency "
+        "because it is only used to build the deck:\n"
+        '  pip install -e ".[docs]"      (or: uv sync --extra docs)')
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "outputs"

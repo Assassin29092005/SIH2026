@@ -34,7 +34,10 @@ REQUIRED_MODULES = [
 
 # Needed only for work that is planned rather than done: the SPICE
 # reconstruction in ROADMAP 1.5. Absent is fine.
-OPTIONAL_MODULES = ["spiceypy"]
+# Optional: not needed to run the pipeline or the tests. `docx` and `pptx`
+# are the deliverable generators (`pip install -e ".[docs]"`); `spiceypy`
+# is for the unwritten SPICE work in ROADMAP 1.5.
+OPTIONAL_MODULES = ["spiceypy", "docx", "pptx"]
 
 
 def check_modules() -> list[str]:

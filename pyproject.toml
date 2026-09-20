@@ -26,7 +26,12 @@ dev = ["pytest>=8.0"]
 # spiceypy is for the SPICE reconstruction in ROADMAP 1.5, which is planned and
 # not written. Nothing imports it yet, so it is opt-in rather than a core cost.
 data = ["spiceypy>=8.0"]
-docs = ["python-docx>=1.1"]     # scripts/make_docs.py
+# The deliverable generators. Each rebuilds a submission artifact from
+# outputs/*.json; none is needed to run the pipeline or the tests.
+docs = [
+    "python-docx>=1.1",     # scripts/make_docs.py  -> the technical report
+    "python-pptx>=1.0",     # scripts/make_deck.py  -> the slide deck
+]
 
 [project.scripts]
 sandhi = "sandhi.cli:main"

@@ -37,3 +37,4 @@ pytest>=8.0
 #   spiceypy      — only for the SPICE work in ROADMAP 1.5, which is not
 #                   written. `pip install -e ".[data]"` when it is.
 #   python-docx   — only scripts/make_docs.py. `pip install -e ".[docs]"`.
+#   python-pptx   — only scripts/make_deck.py.  same extra.

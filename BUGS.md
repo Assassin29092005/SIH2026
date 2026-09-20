@@ -35,6 +35,34 @@ Rules for writing entries:
 
 ## Log
 
+### BUG-031 — `make_deck.py` shipped with an undeclared dependency and CI caught it on the first run
+
+- **Date:** 2026-09-20
+- **Status:** FIXED
+- **Area:** env
+- **Symptom:** the first CI run after adding the deck generator failed in 39 s:
+
+  ```
+  ModuleNotFoundError: No module named 'pptx'
+  ##[error]Process completed with exit code 1.
+  ```
+
+  The step was `scripts/make_deck.py --self-check`, which had passed locally minutes earlier.
+- **Root cause:** `make_deck.py` imports `python-pptx`, and nothing declared it. It is installed globally on the development machine — it is what built the deck by hand in the first place — so every local run found it. `pyproject.toml`'s `docs` extra listed only `python-docx` for `make_docs.py`; the deck generator was added beside it without extending the extra.
+
+  **This is BUG-026 repeating, and BUG-026 said so in its own closing note:** *"neither bug is reachable on a machine that has been developing the project, because the missing packages were already installed. Only a fresh clone shows them, which is the argument for testing that path rather than reasoning about it."* The argument was right and it was not acted on — the fresh-clone path was still only ever exercised by hand.
+- **Second fault, which would have failed the next run too:** adding `python-pptx` to `pyproject.toml` leaves `uv.lock` stale, and CI runs `uv sync` against the committed lock. Verified before pushing with `uv lock --check` and `uv sync --extra dev --extra docs --locked --dry-run`, both exit 0 after regenerating. The regeneration added exactly `python-pptx 1.0.2` and its `xlsxwriter 3.2.9` dependency, 26 lines, with no other pin moved.
+- **Fix:**
+  - `pyproject.toml` — `docs` extra now carries both generators' dependencies, with a comment saying what the extra is for.
+  - `uv.lock` regenerated, 70 → 72 packages.
+  - `requirements.txt` — records `python-pptx` in its deliberately-omitted list, beside `python-docx`.
+  - `scripts/check_env.py:37` — `OPTIONAL_MODULES` now probes `docx` and `pptx`, so the environment check reports on them instead of staying silent. This file was the third copy of the dependency list and was wrong in the same direction in BUG-026.
+  - `scripts/make_deck.py` — the import is guarded and exits with `pip install -e ".[docs]"` rather than a bare traceback from inside a build script.
+  - `.github/workflows/ci.yml` — `uv sync --extra dev --extra docs`.
+- **What CI is worth, measured:** this is the first defect the workflow caught, on its first run, in a file that had passed every local check. The run before it was genuinely green — it downloaded torch (528.9 MiB), ran `29 passed, 1 skipped, 11 deselected in 3.13s` and the blind-matcher rejection in 1.04 s — so the red was a real signal and not a broken pipeline.
+- **The one skip is expected.** `tests/test_units.py` carries a `data`-marked test that needs `data/raw/nac/`, which no runner has. It is selected by `-m "not slow"` and skips on the guard. The gate tests are separately protected: the workflow asserts the six sample crops exist before running, and fails explicitly if either gate step reports a skip, because a skip is otherwise a green build.
+- **Check:** `python scripts/check_env.py` reports `pptx OK (optional)` and names it when absent; `python scripts/make_deck.py --self-check` exits 1 with the install instruction when `pptx` cannot be imported — verified by blocking the import and running it. CI runs both `--self-check`s on every push.
+
 ### BUG-030 — an identity geotransform was read as "1.0 m/px" and silently overrode the caller's `--gsd`, making the PS clause 7.4x optimistic
 
 - **Date:** 2026-09-20

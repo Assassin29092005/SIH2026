@@ -49,8 +49,11 @@ jobs:
         with:
           enable-cache: true
 
+      # `docs` carries python-docx and python-pptx, which the deliverable
+      # generators need. Without it the make_deck self-check below dies on
+      # ModuleNotFoundError -- which is how this was found. See BUG-031.
       - name: Install
-        run: uv sync --extra dev
+        run: uv sync --extra dev --extra docs
 
       # tests/test_pipeline.py skips when the samples are missing, and a skip
       # is a green build. A shallow or filtered checkout would therefore report
