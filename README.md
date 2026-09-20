@@ -645,16 +645,27 @@ If a file carries no georeferencing the command says so rather than inventing
 one — it used to invent 1.0 m/px and silently override `--gsd`, reporting the
 clause 7.4x optimistic. See BUGS.md BUG-030.
 
-## Submission video
+## Submission artifacts
+
+All three regenerate from the committed measurements, so none of them can drift
+away from the evidence the way a hand-edited file does.
 
 ```bash
+python scripts/make_docs.py         # docs/SANDHI_Technical_Report.docx
 python scripts/make_video.py        # outputs/sandhi_demo.mp4, 81 s, 1080p
+python scripts/make_deck.py         # deck/sandhi 26166.pptx
 ```
 
-Built from the committed measurements the same way the technical report is:
-every number on screen is read from `outputs/*.json` at render time, so it
-cannot drift away from the evidence. Uploading is manual and deliberately not
-scripted.
+The deck was the last one to get a generator, and it is the reason the other
+two have theirs: hand-edited slides went fourteen days stale and carried
+"sub-metre positional accuracy" for weeks, a claim wrong by a factor of four.
+`assets/sih_deck_template.pptx` holds the SIH format with each measured figure
+replaced by a token; `make_deck.py` resolves those from `outputs/*.json`.
+**Edit wording in the template, not in `deck/`** — the next run overwrites the
+output. Four figures still have no machine-readable source and are printed on
+every run rather than hidden.
+
+Uploading the video is manual and deliberately not scripted.
 
 ## Setup
 
@@ -690,6 +701,7 @@ python scripts/check_env.py
 | `adopt_check.py` | The bar a fine-tuned checkpoint must clear. Rejected both runs | current |
 | `make_docs.py` | Regenerates the technical report from `outputs/*.json` | current |
 | `make_video.py` | Regenerates the submission video from `outputs/*.json` | current |
+| `make_deck.py` | Regenerates the slide deck from the template plus `outputs/*.json` | current |
 | `check_gate_reports.py` | Fails if a declared-gated result lost its gate. What CI runs | current |
 | `ablation.py`, `dense_match.py`, `scale_pipeline.py` | Retracted experiments | **superseded** |
 

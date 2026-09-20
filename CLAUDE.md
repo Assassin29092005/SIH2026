@@ -215,6 +215,7 @@ python scripts/demo.py --list        # whether each case will use full data or t
 | `python scripts/offset_origin.py --chunks 6` | prints per-axis sigma beside the verdict (BUG-022 guard) | CH-2 + Kaguya |
 | `python scripts/iirs_vs_m3.py --self-check` | `ground_gsd` survives a quantised backplane (BUG-028 guard) | no |
 | `python scripts/make_video.py --self-check` | the video's numbers load and no card is blank | no |
+| `python scripts/make_deck.py --self-check` | every deck token resolves, none left unsubstituted | no |
 | `python scripts/check_gate_reports.py` | every declared gate is present, complete and passing | no |
 
 **Measurement and evaluation**
@@ -246,7 +247,7 @@ python scripts/m3.py fetch --id M3G20090204T234545      # Chandrayaan-1 M3, no l
 
 `kaguya.py` / `ch2_io.py` / `ohrc_project.py` (ingest) → `triple_io.py` (aligned windows) → `remeasure.build_raw_hp` (normalise) → `register.py` (match, refine, fit, write) → `demo.py` (render).
 
-Chandrayaan-2 archives are read **in place through GDAL `/vsizip/`** — never extracted. `data/raw/` holds ~13 GB (ch2 6.8 GB including the 5.1 GB IIRS cube, kaguya 2.6 GB, nac 3.0 GB, m3 832 MB) and is gitignored; `samples/` (5 MB) and `outputs/` (3.8 MB) are committed. `deck/` holds the presentation drafts and is gitignored — **nothing generates it**, unlike `docs/`, which `scripts/make_docs.py` regenerates from `outputs/*.json`.
+Chandrayaan-2 archives are read **in place through GDAL `/vsizip/`** — never extracted. `data/raw/` holds ~13 GB (ch2 6.8 GB including the 5.1 GB IIRS cube, kaguya 2.6 GB, nac 3.0 GB, m3 832 MB) and is gitignored; `samples/` (5 MB) and `outputs/` (3.8 MB) are committed. `deck/` holds the generated presentation and is gitignored, like `docs/`: both are build products. `scripts/make_deck.py` rebuilds the deck from `assets/sih_deck_template.pptx` plus `outputs/*.json`, `scripts/make_docs.py` the report, `scripts/make_video.py` the video. **`assets/` is committed** — it is the SIH-format template the deck is built from, carrying branding and layout that are not ours to generate.
 
 ### Package vs scripts
 
@@ -272,6 +273,7 @@ Chandrayaan-2 archives are read **in place through GDAL `/vsizip/`** — never e
 | `adopt_check.py` | The bar a fine-tuned checkpoint must clear before it is adopted. Rejected both runs. |
 | `make_docs.py` | Regenerates `docs/SANDHI_Technical_Report.docx` from `outputs/*.json`. |
 | `make_video.py` | Regenerates the SIH submission video from `outputs/*.json`, same rule. Uploading is deliberately manual. |
+| `make_deck.py` | Regenerates the slide deck from the template plus `outputs/*.json`. **Edit wording in `assets/sih_deck_template.pptx`, not in `deck/` — the next run overwrites the output.** |
 | `check_gate_reports.py` | Fails if a result declared gated lost its gate, or carries a malformed one. What CI runs. |
 
 ### Three traps

@@ -87,6 +87,15 @@ jobs:
       - name: Reported results must carry their control gate
         run: uv run python scripts/check_gate_reports.py --json gate-report.json
 
+      # The deliverables regenerate from outputs/*.json. If a generator can no
+      # longer resolve a figure, the report, video or deck would quietly ship a
+      # stale one -- which is the drift each of them exists to prevent.
+      - name: The deliverable generators can still resolve every figure
+        run: |
+          uv run python scripts/make_deck.py --self-check
+          uv run python scripts/make_video.py --self-check
+          uv run python scripts/iirs_vs_m3.py --self-check
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
