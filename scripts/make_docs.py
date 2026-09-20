@@ -654,7 +654,10 @@ def build(doc: Document) -> None:
         ["Band choice", "Sweep 898-4504 nm gives 0-5 matches at **every** wavelength."],
         ["Reflectance vs radiance", "Both cubes give correlation +0.0326, identical to "
          "four decimals."],
-        ["Projection", "Polynomial fit (3.48 px) **and** direct per-pixel backplane "
+        # 3.96, not 3.48: the report and README disagreed on the same quantity.
+        # Settled by re-running scripts/iirs_vs_m3.py on 2026-09-20, which
+        # prints "projected IIRS ... (fit 3.96 px)" -- README was right.
+        ["Projection", "Polynomial fit (3.96 px) **and** direct per-pixel backplane "
          "reprojection (0.449 px) both fail."],
         ["Strip shape and the imagery itself", "Two bands of one cube register at "
          "**3528 matches, 100% inliers**, correlation +0.986."],

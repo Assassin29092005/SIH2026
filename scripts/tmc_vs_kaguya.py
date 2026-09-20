@@ -188,7 +188,14 @@ def main() -> int:
     out = ROOT / args.out_dir
     out.mkdir(exist_ok=True)
     warped = pipeline.warp(r["src"], r)
-    paths = outputs.write_all(r, warped, out, "tmc2")
+    # The gate belongs IN the deliverable, not only in the run log beside it.
+    # tmc2_metrics.json is the file this project's headline result is read
+    # from, and it carried no control result while tmc_vs_kaguya.json -- same
+    # run, same gate -- carried one. Anyone handed the deliverable alone could
+    # not tell whether it had been gated at all.
+    paths = outputs.write_all(r, warped, out, "tmc2",
+                              extra={"gate": report["gate"]} if "gate" in report
+                              else None)
     (out / "tmc_vs_kaguya.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(f"\nwrote {out/'tmc_vs_kaguya.json'} and {len(paths)} deliverables")
     return 0

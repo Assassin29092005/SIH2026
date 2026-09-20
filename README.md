@@ -34,7 +34,7 @@ python scripts/demo.py --case all
 
 Three figures and three metrics files land in `outputs/`, about 20 s per case on CPU. This works on a bare machine because **3 MB of genuine cropped imagery is committed in `samples/`** — real observations, cropped only, never synthetic.
 
-Verified by cloning this repository fresh, with no Chandrayaan-2 archive present and no `PYTHONPATH` set: it runs and reproduces the sample figures. Each figure is labelled `[sample]` when it used the committed crop. The headline tables below are measured on the **full products**, which cover more ground and therefore give different — generally better — numbers: TMC-2 gives 3085 matches at 0.595 px on the full strip against 3073 at 0.760 px on the sample crop. `--list` tells you which source each case will use, and no figure ever silently mixes the two.
+Verified by cloning this repository fresh, with no Chandrayaan-2 archive present and no `PYTHONPATH` set: it runs and reproduces the sample figures. Each figure is labelled `[sample]` when it used the committed crop. The headline tables below are measured on the **full products**, which cover more ground and therefore give different — generally better — numbers: TMC-2 gives 3085 matches at 0.595 grid px (**0.872 source px**) on the full strip against 3073 at 0.579 grid px (**0.849 source px**) on the sample crop — both sub-pixel in the source product, measured through the same package path. `--list` tells you which source each case will use, and no figure ever silently mixes the two.
 
 | What you need | Why | Size |
 |---|---|---|
@@ -569,7 +569,7 @@ pip install -r requirements.txt
 python scripts/demo.py --case all
 ```
 
-**Runs from a fresh clone.** `samples/` carries 3 MB of real cropped imagery — genuine observations, not synthetic — so the demo works with no downloads. It takes ~20 s per case on CPU and produces identical numbers to the full-resolution data. Downloading the full products (~7 GB) is only needed to work on new regions.
+**Runs from a fresh clone.** `samples/` carries 5 MB of real cropped imagery — genuine observations, not synthetic — so the demo works with no downloads. It takes ~20 s per case on CPU. The sample crop covers less ground than the full product, so its numbers are close but not identical — 0.849 source px against 0.872 on TMC-2, both sub-pixel — and every figure says which it used. Downloading the full products (~7 GB) is only needed to work on new regions.
 
 ![Kaguya cross-illumination](outputs/demo_kaguya.png)
 
@@ -577,18 +577,84 @@ python scripts/demo.py --case all
 
 Each figure shows source, reference, the registered checkerboard overlay, the correspondences (green inlier / red rejected), where the match points landed on an 8x8 grid, and the metrics. `--list` reports whether each case will use full data or the committed sample.
 
-| Case | Matches | Inliers | RMSE (grid) | RMSE (source px) | Coverage |
-|---|---|---|---|---|---|
-| Kaguya morning vs evening | 132 | 65 (49%) | **0.796 px** | 0.796 ✓ | 0.34 |
-| **Chandrayaan-2 TMC-2 vs Kaguya** | **3085** | **2359 (76%)** | **0.704 px = 5.21 m** | 1.03 | 0.84 |
-| **Chandrayaan-2 OHRC vs Kaguya** | **1443** | **730 (51%)** | **0.752 px = 5.56 m** | 14.6–21.4 ✗ | 0.28 |
+| Case | Matches | Inliers | RMSE (grid) | RMSE (source px) | Coverage | Model |
+|---|---|---|---|---|---|---|
+| Kaguya morning vs evening | 132 | 65 (49%) | **0.796 px = 5.89 m** | 0.796 ✓ | 0.34 | similarity |
+| **Chandrayaan-2 TMC-2 vs Kaguya** | **3085** | **3064 (99%)** | **0.595 px = 4.41 m** | **0.872 ✓** | **0.89** | affine |
+| **Chandrayaan-2 OHRC vs Kaguya** | **1443** | **1427 (99%)** | **0.513 px = 3.80 m** | 14.6 ✗ | 0.39 | affine |
 
-These are the *demo* figures, which run `scripts/register.py` — the measurement
-record, with model selection off. The package path (`sandhi register`, selection
-on) fits affine instead of similarity and does better: TMC-2 goes to 0.595 grid
-px / **0.872 source px ✓**, OHRC to 0.513 / 14.6. Same data, same pipeline stages;
-the difference is the transform model, and it is documented rather than quietly
-reported as one number.
+Measured on the full products, 2026-09-20. **The demo runs the package path**,
+so these are the same numbers the tables above report — `outputs/demo_tmc.json`
+and `outputs/tmc2_metrics.json` agree to the last decimal on all nine compared
+fields, and a test asserts they can never disagree on the sub-pixel verdict.
+
+They did disagree until recently. The demo called `scripts/register.py`, which
+hardcodes a 4-DOF similarity fit, and on TMC-2 that changed the verdict rather
+than the value: 1.031 source px and **not** sub-pixel, against the 0.872 the
+package reports from the identical 3085 matches. The one command a reviewer runs
+printed the failing number while this README printed the passing one. See
+BUGS.md BUG-027.
+
+OHRC's 14.6 stays visible on purpose: it is 0.513 px of the 7.403 m grid but
+**14.6 pixels of its own 0.26 m product**, and the fix is a finer reference, not
+a better matcher.
+
+## Register your own pair
+
+The package is the entry point; `scripts/` stays as the measurement record.
+
+```bash
+sandhi register --source A.tif --reference B.tif --out results/     --gsd 7.403 --source-native-gsd 5.05 --controls
+```
+
+Worked example on the committed samples, no download needed:
+
+```bash
+sandhi register --source samples/tmc_source.png --reference samples/tmc_reference.png     --gsd 7.403 --source-native-gsd 5.05 --controls --out results/
+```
+
+```
+model            affine
+matches          3073
+inliers          2971 (97%)
+RMSE             0.579 px = 4.29 m  (common grid 7.403 m/px)   [SUB-PIXEL]
+  in SOURCE px   0.849 px  (source 5.05 m/px)   [SUB-PIXEL]
+coverage         0.89   entropy 0.89
+
+running the four-control gate (about 4x the registration)...
+PASS  control gate
+  real pair          n=3417  dx=+21.50 dy=+2.46                   PASS
+  roll +15 raw       dx moved -14.99 (want -15)                   PASS
+  noise              n=102 vs real 3417, ratio 33.5x              PASS
+  constant           n=0 vs real 3417, ratio 3417.0x              PASS
+```
+
+Three files land in `results/`: the registered product (**GeoTIFF** when the
+reference carries a CRS, PNG otherwise), a match-point CSV, and a metrics JSON.
+With `--controls` the gate result is written **into** that JSON rather than only
+printed beside it, and the command exits 2 if the gate fails — a failing gate
+means the matches are not tracking the terrain, so the metrics describe an
+artifact.
+
+**On the two GSD flags.** `--gsd` is the common grid; `--source-native-gsd` is
+the source product's own resolution, which differs whenever the source was
+projected before being handed over (OHRC arrives as a 7.403 m GeoTIFF built
+from a 0.26 m product). The PS's "sub-pixel accuracy of source image" is stated
+against the native figure, so conflating them overclaims by the scale ratio.
+If a file carries no georeferencing the command says so rather than inventing
+one — it used to invent 1.0 m/px and silently override `--gsd`, reporting the
+clause 7.4x optimistic. See BUGS.md BUG-030.
+
+## Submission video
+
+```bash
+python scripts/make_video.py        # outputs/sandhi_demo.mp4, 81 s, 1080p
+```
+
+Built from the committed measurements the same way the technical report is:
+every number on screen is read from `outputs/*.json` at render time, so it
+cannot drift away from the evidence. Uploading is manual and deliberately not
+scripted.
 
 ## Setup
 
@@ -617,7 +683,14 @@ python scripts/check_env.py
 | `ohrc_vs_kaguya.py` | Real Chandrayaan-2 registration | current |
 | `register.py` | Stage D: sub-pixel, match export, registered product | current |
 | `viewpoint.py` | Model selection and the obliquity limit | current |
-| **`demo.py`** | **One-command end-to-end run with figures** | current |
+| **`demo.py`** | **One-command end-to-end run with figures**, through the package path | current |
+| `baselines.py` | SIFT / ASIFT / ORB / DISK+LightGlue / phase correlation, same gate | current |
+| `offset_origin.py` | Separates Chandrayaan-2 geolocation error from ours | current |
+| `iirs_vs_kaguya.py`, `iirs_vs_m3.py`, `m3.py` | The IIRS investigation and the M3 control | current |
+| `adopt_check.py` | The bar a fine-tuned checkpoint must clear. Rejected both runs | current |
+| `make_docs.py` | Regenerates the technical report from `outputs/*.json` | current |
+| `make_video.py` | Regenerates the submission video from `outputs/*.json` | current |
+| `check_gate_reports.py` | Fails if a declared-gated result lost its gate. What CI runs | current |
 | `ablation.py`, `dense_match.py`, `scale_pipeline.py` | Retracted experiments | **superseded** |
 
 ```bash
@@ -665,7 +738,7 @@ The morning/evening asymmetry is now partly explained: OHRC correlates +0.066 wi
 See [ROADMAP.md](ROADMAP.md). The two items that matter most are not features:
 
 1. **Correcting for the measured OHRC geometry.** The label's `pixel_resolution = 0.26` is wrong — the product's own geometry gives 0.3060 x 0.3225 m — and it currently sizes the anti-alias kernel, over-blurring by ~20%. Using the measured values should sharpen every OHRC number.
-2. **Wiring the control gate into CI.** It is now a test — `pytest tests/test_pipeline.py::test_control_gate_passes`, alongside one that feeds the gate a deliberately blind matcher and asserts it is rejected — so it can fail a build. What is left is running it on a hosted runner rather than on a laptop.
+2. ~~**Wiring the control gate into CI.**~~ **Done, 2026-09-20.** `.github/workflows/ci.yml` runs the unit suite and the blind-matcher rejection test on every push and pull request, and the full four-control gate on all three bundled cases nightly. `scripts/check_gate_reports.py` fails the build if a result declared gated loses its gate or carries a malformed one. The gate result is now written **into** the deliverable metrics JSON rather than printed beside it, so a reader handed `tmc2_metrics.json` alone can tell it was gated.
 
 The roadmap also records what was tried and abandoned — Stage B, blind scale estimation, bucketed selection — so the cost is not paid twice.
 

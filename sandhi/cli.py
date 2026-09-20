@@ -117,14 +117,43 @@ def cmd_register(args) -> int:
         print("  in SOURCE px   unknown - pass --source-gsd and --reference-gsd")
     print(f"coverage         {m['coverage']:.2f}   entropy {m['entropy']:.2f}")
 
+    # The four-control gate, written INTO the deliverable rather than printed
+    # beside it. `outputs.write_metrics` already merges an arbitrary `extra`
+    # dict, so this is a call-site change, not a schema change. Off by default
+    # because the gate runs the matcher four more times -- roughly 4x the cost
+    # of the registration it is checking. NEXTSTEP Priority 3 item 3.
+    extra = None
+    if args.controls:
+        print()
+        print("running the four-control gate (about 4x the registration)...")
+        report = controls.run(controls.default_match_fn(), src, ref)
+        print(report)
+        extra = {"gate": {
+            "passed": bool(report.passed),
+            "checks": {c["name"]: bool(c["passed"]) for c in report.checks},
+            "detail": {c["name"]: c["detail"] for c in report.checks},
+        }}
+        if not report.passed:
+            # A failing gate means the matches are not tracking the terrain, so
+            # the metrics above describe an artifact. Say so where a reader
+            # cannot miss it, and exit non-zero even though a model was fitted.
+            print()
+            print("GATE FAILED - the numbers above are not evidence of "
+                  "registration.")
+            print("They are still written, with the gate result beside them, "
+                  "so the failure is on the record.")
+
     if args.out:
         warped = pipeline.warp(result["src"], result)
         paths = outputs.write_all(result, warped, Path(args.out),
                                   args.name or Path(args.source).stem,
-                                  crs=crs, transform=transform)
+                                  crs=crs, transform=transform, extra=extra)
         for k, v in paths.items():
             print(f"wrote {k:<13} {v}")
-    return 0
+    elif extra:
+        print()
+        print("(--out not given, so the gate result was not written anywhere)")
+    return 0 if (extra is None or extra["gate"]["passed"]) else 2
 
 
 def cmd_controls(args) -> int:
@@ -194,6 +223,10 @@ def build_parser() -> argparse.ArgumentParser:
                         "metric; defaults to --source-gsd")
     r.add_argument("--reference-gsd", type=float,
                    help="reference product's native m/px")
+    r.add_argument("--controls", action="store_true",
+                   help="also run the four-control gate and write its result "
+                        "into the metrics JSON. Costs about 4x the "
+                        "registration, and exits 2 if the gate fails")
     r.add_argument("--no-refine", action="store_true")
     r.add_argument("--no-model-selection", action="store_true")
     r.set_defaults(func=cmd_register)

@@ -1,0 +1,150 @@
+# The control gate, enforced by automation rather than by convention.
+#
+# The gate is the thing that caught BUG-011 -- a shared zero-mask that produced
+# a beautiful, false 100% inlier result -- so it should fail a build, not rely
+# on someone remembering to run it. NEXTSTEP.md Priority 2.
+#
+# Two jobs, because they cost three orders of magnitude apart:
+#
+#   fast      every push and pull request. The 30 unit tests plus the one test
+#             that feeds the gate a matcher which ignores its input. Seconds.
+#   gate      nightly and on demand. The four-control gate on all three bundled
+#             cases, which runs the matcher four times per case. ~50 min on a
+#             hosted runner, which is why it is not on the PR path.
+#
+# Nothing here needs imagery, an account or a GPU: samples/ carries 5 MB of
+# genuine cropped observations and is tracked.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+env:
+  # Some environments export this and it makes torch grab every core on a
+  # 2-core runner, which is slower, not faster.
+  OMP_NUM_THREADS: "2"
+
+jobs:
+  fast:
+    name: unit tests + blind-matcher rejection
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      # `opencv-python` is the GUI build, not `opencv-python-headless`, and
+      # cv2 is imported at module level in sandhi/pipeline.py and
+      # sandhi/normalize.py. Without libgl1 the suite dies at import with
+      # "libGL.so.1: cannot open shared object file" before a test runs.
+      - name: System libraries for opencv
+        run: sudo apt-get update && sudo apt-get install -y libgl1 libglib2.0-0
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install
+        run: uv sync --extra dev
+
+      # tests/test_pipeline.py skips when the samples are missing, and a skip
+      # is a green build. A shallow or filtered checkout would therefore report
+      # PASS with the gate never executed. Fail here instead, loudly.
+      - name: The committed samples must actually be present
+        run: |
+          set -e
+          test -f samples/samples.json
+          for f in kaguya_morning kaguya_evening ohrc_source ohrc_reference \
+                   tmc_source tmc_reference; do
+            test -s "samples/$f.png" || { echo "missing samples/$f.png"; exit 1; }
+          done
+          echo "all six sample crops present"
+
+      - name: Unit tests
+        run: uv run pytest -m "not slow"
+
+      # The acceptance criterion "a deliberately input-ignoring matcher fails
+      # CI". Its blind_match returns fixed arrays, so controls.run never reaches
+      # LoFTR: no samples, no checkpoint, no network. It is excluded from the
+      # fast suite only by the blanket slow marker on the module, so it is
+      # reached by node id.
+      - name: The gate must reject a matcher that ignores its input
+        run: |
+          uv run pytest -rs --no-header \
+            tests/test_pipeline.py::test_gate_rejects_a_matcher_that_ignores_its_input \
+            | tee blind-matcher.txt
+          grep -q "1 passed" blind-matcher.txt
+          if grep -q "skipped" blind-matcher.txt; then
+            echo "the rejection test was SKIPPED - that is not a pass"; exit 1
+          fi
+
+      # --json so the artifact below actually has something to upload.
+      - name: Reported results must carry their control gate
+        run: uv run python scripts/check_gate_reports.py --json gate-report.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: metrics-and-control-reports
+          path: |
+            outputs/*.json
+            blind-matcher.txt
+            gate-report.json
+          if-no-files-found: warn
+
+  gate:
+    name: four-control gate on the bundled samples
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: System libraries for opencv
+        run: sudo apt-get update && sudo apt-get install -y libgl1 libglib2.0-0
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install
+        run: uv sync --extra dev
+
+      # kornia fetches the 46 MB LoFTR `outdoor` checkpoint over plain HTTP
+      # from a single academic host. It cannot be vendored (.gitignore excludes
+      # *.ckpt), so cache it rather than depend on that host every night.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/torch/hub/checkpoints
+          key: loftr-outdoor-v1
+
+      - name: Control gate, all three cases
+        run: |
+          uv run pytest -rs --no-header -p no:cacheprovider \
+            tests/test_pipeline.py::test_control_gate_passes | tee gate.txt
+          if grep -q "skipped" gate.txt; then
+            echo "the control gate was SKIPPED - that is not a pass"; exit 1
+          fi
+
+      - name: Write the control report
+        if: always()
+        run: |
+          for case in kaguya ohrc tmc; do
+            uv run python -m sandhi.cli controls --case "$case" \
+              | tee -a control-report.txt
+          done
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: control-gate-report
+          path: |
+            gate.txt
+            control-report.txt
+            outputs/*.json
+          if-no-files-found: warn

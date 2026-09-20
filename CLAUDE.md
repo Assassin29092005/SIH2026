@@ -213,6 +213,9 @@ python scripts/demo.py --list        # whether each case will use full data or t
 | `python scripts/iirs_vs_kaguya.py --controls` | the IIRS negative result and its three controls, incl. 11.49x | CH-2 + Kaguya |
 | `python scripts/baselines.py --case all` | every baseline through the same gate | Kaguya + CH-2 |
 | `python scripts/offset_origin.py --chunks 6` | prints per-axis sigma beside the verdict (BUG-022 guard) | CH-2 + Kaguya |
+| `python scripts/iirs_vs_m3.py --self-check` | `ground_gsd` survives a quantised backplane (BUG-028 guard) | no |
+| `python scripts/make_video.py --self-check` | the video's numbers load and no card is blank | no |
+| `python scripts/check_gate_reports.py` | every declared gate is present, complete and passing | no |
 
 **Measurement and evaluation**
 
@@ -267,19 +270,26 @@ Chandrayaan-2 archives are read **in place through GDAL `/vsizip/`** — never e
 | `offset_origin.py` | Separates Chandrayaan-2 geolocation error from our projection error. Answered ROADMAP 1.1: it is CH-2's, three independent ways. |
 | `m3.py`, `iirs_vs_m3.py`, `iirs_vs_kaguya.py` | Chandrayaan-1 M3 fetch, and the IIRS investigation. M3 ↔ Kaguya at 19.84x passes the gate; IIRS registers against nothing. |
 | `adopt_check.py` | The bar a fine-tuned checkpoint must clear before it is adopted. Rejected both runs. |
-| `make_docs.py` | Regenerates `docs/SANDHI_Technical_Report.docx` from `outputs/*.json`. The pattern the deck still lacks. |
+| `make_docs.py` | Regenerates `docs/SANDHI_Technical_Report.docx` from `outputs/*.json`. |
+| `make_video.py` | Regenerates the SIH submission video from `outputs/*.json`, same rule. Uploading is deliberately manual. |
+| `check_gate_reports.py` | Fails if a result declared gated lost its gate, or carries a malformed one. What CI runs. |
 
 ### Three traps
 
-**0. `demo.py` runs `scripts/register.py`, not the package.** It imports `fit`,
-`register_pair`, `BUCKET_GRID` and `uniformity` from `register` and
-`build_raw_hp` from `remeasure`, so the one command a reviewer runs skips the
-model selection the package does by default. The cost is visible in the
-committed outputs: on the same full TMC-2 data, `outputs/demo_tmc.json` reports
-`rmse_source_px` **1.031 — not sub-pixel**, while `outputs/tmc2_metrics.json`
-(package path, `model_kind: affine`) reports **0.872 — sub-pixel**. Both are
-honest; the demo is simply the weaker path. Rewiring it means re-running and
-re-gating every committed figure, so it is a deliberate task, not a drive-by.
+**0. `demo.py` now runs the package, and must keep doing so.** It calls
+`sandhi.pipeline.register()` and `pipeline.warp()`, and takes its metric block
+from the package rather than recomputing one. It used to call
+`scripts/register.py`, which hardcodes a 4-DOF similarity fit, and on TMC-2
+that decided the PS's headline clause: identical 3085 matches, but 1.031
+source px and NOT sub-pixel through the old path against 0.872 and sub-pixel
+through the package (BUG-027, fixed 2026-09-20). Two things must stay true if
+anyone touches the call: the loaders already resample to the common grid, so
+`run()` passes `gsd_m` and `source_native_gsd` but **never** `src_gsd`/`ref_gsd`
+(that would resample twice); and `source_native_gsd` is what keeps OHRC's limit
+visible — drop it and the 0.26 m product is scored against the 7.403 m grid it
+was projected onto, turning a stated limit into a false SUB-PIXEL pass.
+`tests/test_units.py::test_demo_and_reported_metrics_agree_on_the_subpixel_verdict`
+guards the verdict.
 
 **1. The superseded modules are still imported.** `ablation.py`, `dense_match.py` and `scale_pipeline.py` carry SUPERSEDED banners because their *results* were retracted (BUG-011), but current code imports their *helpers*:
 

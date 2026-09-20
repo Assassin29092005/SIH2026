@@ -51,5 +51,14 @@
         "gain_over_simpler": 0.02945886933420865
       }
     }
+  },
+  "gate": {
+    "passed": true,
+    "checks": {
+      "real pair": true,
+      "roll +15 raw": true,
+      "noise": true,
+      "constant": true
+    }
   }
 }
